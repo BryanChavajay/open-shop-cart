@@ -1,0 +1,39 @@
+{
+    "folders": [
+        {
+            "name": "API",
+            "path": "api"
+        },
+        {
+            "name": "FRONTEND",
+            "path": "frontend"
+        },
+        {
+            "name": "ROOT",
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.exclude": {
+            "**/.git": true,
+            "**/.svn": true,
+            "**/.hg": true,
+            "**/.DS_Store": true,
+            "**/Thumbs.db": true,
+            "api": true,
+            "frontend": true
+        }
+    },
+    "extensions": {
+        "recommendations": [
+            "charliermarsh.ruff",
+            "esbenp.prettier-vscode",
+            "dbaeumer.vscode-eslint",
+            "dsznajder.es7-react-js-snippets",
+            "eamodio.gitlens",
+            "yzhang.markdown-all-in-one",
+            "bierner.markdown-mermaid",
+            "bradlc.vscode-tailwindcss"
+        ]
+    }
+}
