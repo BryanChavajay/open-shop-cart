@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
-import { BaseError } from "../../../../domain/errors/base-error.js";
-import { ValidateError } from "../../../../domain/errors/validate-error.js";
+import { BaseError } from "../../../../domain/shared/errors/base-error.js";
+import { ValidateError } from "../../../../domain/shared/errors/validate-error.js";
 
 const INTERNAL_SERVER_ERROR = "Internal server error";
 
