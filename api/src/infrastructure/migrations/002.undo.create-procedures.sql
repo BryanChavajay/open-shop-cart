@@ -1,0 +1,17 @@
+DROP PROCEDURE IF EXISTS dbo.SP_BandejaCorreos_Actualizar;
+DROP PROCEDURE IF EXISTS dbo.SP_BandejaCorreos_Listar;
+DROP PROCEDURE IF EXISTS dbo.SP_BandejaCorreos_Guardar;
+DROP PROCEDURE IF EXISTS dbo.SP_RefreshTokens_Guardar;
+DROP PROCEDURE IF EXISTS dbo.SP_RefreshTokens_Buscar;
+DROP PROCEDURE IF EXISTS dbo.SP_Autorizaciones_ActualizarUso;
+DROP PROCEDURE IF EXISTS dbo.SP_Autorizaciones_Listar;
+DROP PROCEDURE IF EXISTS dbo.SP_Autorizaciones_Buscar;
+DROP PROCEDURE IF EXISTS dbo.SP_Autorizaciones_Guardar;
+DROP PROCEDURE IF EXISTS dbo.SP_Usuarios_Listar;
+DROP PROCEDURE IF EXISTS dbo.SP_Usuarios_Contar;
+DROP PROCEDURE IF EXISTS dbo.SP_Usuarios_ObtenerDetalle;
+DROP PROCEDURE IF EXISTS dbo.SP_Usuarios_ObtenerActual;
+DROP PROCEDURE IF EXISTS dbo.SP_Usuarios_BuscarPorCorreo;
+DROP PROCEDURE IF EXISTS dbo.SP_Usuarios_BuscarPorIdentificadorPublico;
+DROP PROCEDURE IF EXISTS dbo.SP_Usuarios_Guardar;
+DROP PROCEDURE IF EXISTS dbo.SP_Usuarios_Actualizar;
