@@ -1,0 +1,155 @@
+@API-V1 = http://localhost:5000/api/v1
+@ACCESS-TOKEN = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzc3YiOiI1MDUyNDliYy1hZTczLTRiMjItYWE0Ni0wNzgwODBiMTg0MGYiLCJ0b2tlbl91c2UiOiJhY2Nlc3MiLCJzdWIiOiIwMWExOGYzZS01Y2Q0LTcyMzEtYWM4OS0yZWNlNmVhNjY2MDkiLCJqdGkiOiJmNzQ4YmM4My04NTJmLTRiNjEtYTE0Ny01MDg2NzU5NzEzYTgiLCJpc3MiOiJvcGVuc2hvcGNhcnQtYXBpIiwiYXVkIjoib3BlbnNob3BjYXJ0LXdlYiIsImlhdCI6MTc5MzQyMzg3MiwiZXhwIjoxNzkzNDI0NzcyfQ.UIslnGGH-ACeNJO_gLMw8ZFq1AYvu9NcbloY2n5_WfE
+@PUBLIC-ID = <public-id-del-usuario>
+@ORIGIN = http://localhost:5173
+
+### AUTH — Registrar cliente
+POST {{API-V1}}/auth/register
+Content-Type: application/json
+Origin: {{ORIGIN}}
+
+{
+  "firstName": "DONALD",
+  "lastName": "Cho",
+  "email": "thomaschavajay20@gmail.com",
+  "password": "Cambiar123!"
+}
+
+### AUTH — Iniciar sesión
+POST {{API-V1}}/auth/login
+Content-Type: application/json
+Origin: {{ORIGIN}}
+
+{
+  "email": "ana.perez@example.com",
+  "password": "Cambiar123!"
+}
+
+### AUTH — Renovar access token
+# Envía automáticamente la cookie refreshToken obtenida en login.
+POST {{API-V1}}/auth/refresh
+Origin: {{ORIGIN}}
+
+### AUTH — Cerrar sesión actual
+# Envía automáticamente la cookie refreshToken obtenida en login.
+POST {{API-V1}}/auth/logout
+Origin: {{ORIGIN}}
+
+### AUTH — Cerrar todas las sesiones
+POST {{API-V1}}/auth/logout-all
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### AUTH — Solicitar recuperación de contraseña
+POST {{API-V1}}/auth/password-recovery
+Content-Type: application/json
+Origin: {{ORIGIN}}
+
+{
+  "email": "ana.perez@example.com"
+}
+
+### AUTH — Restablecer contraseña
+POST {{API-V1}}/auth/reset-password
+Content-Type: application/json
+Origin: {{ORIGIN}}
+
+{
+  "token": "<token-de-recuperacion>",
+  "password": "NuevaClave123!"
+}
+
+### AUTH — Confirmar cuenta
+POST {{API-V1}}/auth/confirm-account
+Content-Type: application/json
+Origin: {{ORIGIN}}
+
+{
+  "token": "<token-de-confirmacion>"
+}
+
+### USERS — Obtener mi perfil
+GET {{API-V1}}/users/me
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### USERS — Actualizar mi perfil
+PATCH {{API-V1}}/users/me
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "firstName": "ANA",
+  "lastName": "PEREZ",
+  "email": "ana.perez@example.com",
+  "password": "NuevaClave123!"
+}
+
+### USERS — Listar usuarios (solo administrador)
+# Valores por defecto: page=1 y pageSize=20. email es opcional.
+GET {{API-V1}}/users/?page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### USERS — Listar usuarios filtrando por email (solo administrador)
+GET {{API-V1}}/users/?email=ana.perez@example.com&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### USERS — Crear usuario interno (solo administrador)
+POST {{API-V1}}/users/
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "firstName": "Carlos",
+  "lastName": "García",
+  "email": "carlos.garcia@example.com",
+  "password": "Cambiar123!",
+  "role": "OPERADOR"
+}
+
+### USERS — Obtener usuario por publicId (solo administrador)
+GET {{API-V1}}/users/{{PUBLIC-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### USERS — Actualizar usuario (solo administrador)
+PATCH {{API-V1}}/users/{{PUBLIC-ID}}
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "firstName": "Carlos",
+  "lastName": "García",
+  "email": "carlos.garcia@example.com",
+  "role": "ADMINISTRADOR"
+}
+
+### USERS — Activar o desactivar usuario (solo administrador)
+PATCH {{API-V1}}/users/{{PUBLIC-ID}}/active
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "isActive": true
+}
+
+### USERS — Eliminar usuario (solo administrador)
+DELETE {{API-V1}}/users/{{PUBLIC-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### USERS — Solicitar recuperación de contraseña (solo administrador)
+POST {{API-V1}}/users/{{PUBLIC-ID}}/password-recovery
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### USERS — Reenviar confirmación de cuenta (solo administrador)
+POST {{API-V1}}/users/{{PUBLIC-ID}}/confirm-account
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
