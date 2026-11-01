@@ -1,0 +1,51 @@
+import { Router } from "express";
+import multer from "multer";
+import { Role } from "../../../../domain/users/enums/role.enum.js";
+import * as schemas from "../../../../infrastructure/dtos/zod/catalog/request.schemas.js";
+import type { CatalogUseCases } from "../../../../application/catalog/catalog-use-cases.js";
+import type { Identity } from "../middleware/guard.middleware.js";
+import { createCatalogControllers, onUploadFailure } from "./controllers.js";
+import { guard } from "../middleware/guard.middleware.js";
+import { validate } from "../middleware/validate.middleware.js";
+
+export function createCatalogRouter(catalog: CatalogUseCases, identity: Identity): Router {
+  const router = Router();
+  const c = createCatalogControllers(catalog);
+  const admin = guard(identity, Role.ADMINISTRADOR);
+  const id = validate(schemas.publicIdParamsSchema, "params");
+  const variant = validate(schemas.productVariantParamsSchema, "params");
+  const image = validate(schemas.imageParamsSchema, "params");
+  const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 10 } });
+  const taxonomy = (path: string, group: typeof c.createCategory, list: typeof c.listCategories, get: typeof c.getCategory, update: typeof c.updateCategory, del: typeof c.deleteCategory) => {
+    const createSchema = path === "/categories" ? schemas.createCategorySchema : schemas.createBrandSchema;
+    const updateSchema = path === "/categories" ? schemas.updateCategorySchema : schemas.updateBrandSchema;
+    router.post(path, admin, validate(createSchema), group);
+    router.get(path, admin, validate(schemas.listTaxonomyQuerySchema, "query"), list);
+    router.get(`${path}/:publicId`, admin, id, get);
+    router.patch(`${path}/:publicId`, admin, id, validate(updateSchema), update);
+    router.delete(`${path}/:publicId`, admin, id, del);
+  };
+  taxonomy("/categories", c.createCategory, c.listCategories, c.getCategory, c.updateCategory, c.deleteCategory);
+  taxonomy("/brands", c.createBrand, c.listBrands, c.getBrand, c.updateBrand, c.deleteBrand);
+  router.get("/catalog/products", validate(schemas.publicCatalogQuerySchema, "query"), c.listPublic);
+  router.get("/catalog/products/:publicId", id, c.getPublic);
+  router.get("/catalog/images/:imagePublicId", image, c.servePublicImage);
+  router.post("/products", admin, validate(schemas.createProductSchema), c.createProduct);
+  router.get("/products", admin, validate(schemas.listProductsAdminQuerySchema, "query"), c.listProducts);
+  router.get("/products/:publicId", admin, id, c.getProduct);
+  router.patch("/products/:publicId", admin, id, validate(schemas.updateProductSchema), c.updateProduct);
+  router.patch("/products/:publicId/active", admin, id, validate(schemas.setProductActiveSchema), c.setProductActive);
+  router.patch("/products/:publicId/options", admin, id, validate(schemas.replaceProductOptionsSchema), c.replaceOptions);
+  router.put("/products/:publicId/cover", admin, id, validate(schemas.assignImageSchema), c.assignProductCover);
+  router.delete("/products/:publicId", admin, id, c.deleteProduct);
+  router.post("/products/:publicId/variants", admin, id, validate(schemas.addVariantSchema), c.addVariant);
+  router.patch("/products/:publicId/variants/:variantPublicId", admin, variant, validate(schemas.updateVariantSchema), c.updateVariant);
+  router.put("/products/:publicId/variants/:variantPublicId/cover", admin, variant, validate(schemas.assignImageSchema), c.assignVariantCover);
+  router.put("/products/:publicId/variants/:variantPublicId/carousel", admin, variant, validate(schemas.setCarouselSchema), c.setVariantCarousel);
+  router.delete("/products/:publicId/variants/:variantPublicId", admin, variant, c.deleteVariant);
+  router.post("/images", admin, upload.array("images", 10), onUploadFailure, validate(schemas.uploadProductImagesBodySchema), c.uploadImages);
+  router.patch("/images/:imagePublicId", admin, image, validate(schemas.updateProductImageSchema), c.updateImage);
+  router.delete("/images/:imagePublicId", admin, image, c.deleteImage);
+  router.get("/images/:imagePublicId", admin, image, c.serveAdminImage);
+  return router;
+}

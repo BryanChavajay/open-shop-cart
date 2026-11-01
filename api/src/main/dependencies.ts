@@ -1,5 +1,6 @@
 import type { ConnectionPool } from "mssql";
 import type { Redis } from "ioredis";
+import { isAbsolute, resolve } from "node:path";
 import { env } from "../config.js";
 import { Login } from "../application/auth/login.js";
 import { RefreshSession } from "../application/auth/refresh-session.js";
@@ -23,6 +24,34 @@ import { BootstrapAdministrator } from "../application/users/bootstrap-administr
 import { StartPasswordRecovery } from "../application/users/start-password-recovery.js";
 import { ResendConfirmation } from "../application/users/resend-confirmation.js";
 import { ProcessOutbox } from "../application/auth/process-email-outbox.js";
+import { CreateCategory } from "../application/catalog/create-category.js";
+import { UpdateCategory } from "../application/catalog/update-category.js";
+import { DeleteCategory } from "../application/catalog/delete-category.js";
+import { ListCategories } from "../application/catalog/list-categories.js";
+import { GetCategory } from "../application/catalog/get-category.js";
+import { CreateBrand } from "../application/catalog/create-brand.js";
+import { UpdateBrand } from "../application/catalog/update-brand.js";
+import { DeleteBrand } from "../application/catalog/delete-brand.js";
+import { ListBrands } from "../application/catalog/list-brands.js";
+import { GetBrand } from "../application/catalog/get-brand.js";
+import { CreateProduct } from "../application/catalog/create-product.js";
+import { UpdateProduct } from "../application/catalog/update-product.js";
+import { ActivateProduct } from "../application/catalog/activate-product.js";
+import { DeactivateProduct } from "../application/catalog/deactivate-product.js";
+import { DeleteProduct } from "../application/catalog/delete-product.js";
+import { GetProduct } from "../application/catalog/get-product.js";
+import { ListProductsAdmin } from "../application/catalog/list-products-admin.js";
+import { ReplaceProductOptions } from "../application/catalog/replace-product-options.js";
+import { AddVariant } from "../application/catalog/add-variant.js";
+import { UpdateVariant } from "../application/catalog/update-variant.js";
+import { DeleteVariant } from "../application/catalog/delete-variant.js";
+import { UploadProductImages } from "../application/catalog/upload-product-images.js";
+import { UpdateProductImage } from "../application/catalog/update-product-image.js";
+import { DeleteProductImage } from "../application/catalog/delete-product-image.js";
+import { ServeImage } from "../application/catalog/serve-image.js";
+import { AssignProductCover, AssignVariantCover, SetVariantCarousel } from "../application/catalog/assign-image.js";
+import { ListPublicCatalog } from "../application/catalog/list-public-catalog.js";
+import { GetPublicProduct } from "../application/catalog/get-public-product.js";
 import { AuthorizationPurpose } from "../domain/auth/enums/authorization-purpose.enum.js";
 import type { UserCache } from "../domain/users/interfaces/cache/user-cache.js";
 import { PoolSqlExecutor } from "../infrastructure/persistence/mssql/sql-executor.js";
@@ -31,6 +60,7 @@ import { MssqlAuthorizationTokenRepository } from "../infrastructure/persistence
 import { MssqlRefreshTokenRepository } from "../infrastructure/persistence/mssql/repositories/mssql-refresh-token.repository.js";
 import { MssqlEmailOutboxRepository } from "../infrastructure/persistence/mssql/repositories/mssql-email-outbox.repository.js";
 import { MssqlAuditRepository } from "../infrastructure/persistence/mssql/repositories/mssql-audit.repository.js";
+import { MssqlCatalogRepository } from "../infrastructure/persistence/mssql/repositories/mssql-catalog.repository.js";
 import { MssqlUnitOfWork } from "../infrastructure/persistence/mssql/mssql-unit-of-work.js";
 import { ValkeyUserCache } from "../infrastructure/cache/valkey/valkey-user-cache.js";
 import { JoseTokenService } from "../infrastructure/security/jwt-providers/jose-token-service.js";
@@ -38,6 +68,10 @@ import { Argon2PasswordHasher } from "../infrastructure/security/password-hasher
 import { AesGcmSecretCipher } from "../infrastructure/security/encryption-providers/aes-gcm-secret-cipher.js";
 import { CryptoOpaqueTokenGenerator } from "../infrastructure/security/token-generators/crypto-opaque-token-generator.js";
 import { UuidIdentifierGenerator } from "../infrastructure/identifiers/uuid-identifier-generator.js";
+import { InitialsSkuGenerator } from "../infrastructure/identifiers/initials-sku-generator.js";
+import { SharpImageProcessor } from "../infrastructure/images/sharp-image-processor.js";
+import { LocalImageStorage } from "../infrastructure/images/local-image-storage.js";
+import { IvaTaxCalculator } from "../infrastructure/pricing/iva-tax-calculator.js";
 import { SystemClock } from "../infrastructure/clock/system-clock.js";
 import { NodemailerEmailSender } from "../infrastructure/email/nodemailer-email-sender.js";
 
@@ -61,6 +95,16 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
   // Append-only audit log; shared with audited business modules.
   const audit = new MssqlAuditRepository(executor);
   const unitOfWork = new MssqlUnitOfWork(pool);
+
+  // --- Catálogo: repositorio (lectura/escritura) y proveedores propios ---
+  const catalogRepo = new MssqlCatalogRepository(executor);
+  const skuGenerator = new InitialsSkuGenerator();
+  const taxCalculator = new IvaTaxCalculator();
+  const imageProcessor = new SharpImageProcessor();
+  const imagesDirectory = isAbsolute(env.IMAGES_STORAGE_DIR)
+    ? env.IMAGES_STORAGE_DIR
+    : resolve(process.cwd(), env.IMAGES_STORAGE_DIR);
+  const imageStorage = new LocalImageStorage(imagesDirectory);
 
   return {
     identity: { tokens: tokenService, users, cache },
@@ -90,6 +134,84 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
     audit: {
       list: new ListAuditEntries(audit),
       get: new GetAuditEntry(audit),
+    },
+    catalog: {
+      categories: {
+        create: new CreateCategory(catalogRepo, unitOfWork, audit, identifiers),
+        update: new UpdateCategory(catalogRepo, catalogRepo, unitOfWork, audit),
+        delete: new DeleteCategory(catalogRepo, catalogRepo, unitOfWork, audit),
+        list: new ListCategories(catalogRepo),
+        get: new GetCategory(catalogRepo),
+      },
+      brands: {
+        create: new CreateBrand(catalogRepo, unitOfWork, audit, identifiers),
+        update: new UpdateBrand(catalogRepo, catalogRepo, unitOfWork, audit),
+        delete: new DeleteBrand(catalogRepo, catalogRepo, unitOfWork, audit),
+        list: new ListBrands(catalogRepo),
+        get: new GetBrand(catalogRepo),
+      },
+      products: {
+        create: new CreateProduct(
+          catalogRepo,
+          catalogRepo,
+          unitOfWork,
+          audit,
+          identifiers,
+          skuGenerator,
+          taxCalculator,
+        ),
+        update: new UpdateProduct(catalogRepo, catalogRepo, unitOfWork, audit),
+        activate: new ActivateProduct(catalogRepo, catalogRepo, unitOfWork, audit),
+        deactivate: new DeactivateProduct(catalogRepo, catalogRepo, unitOfWork, audit),
+        delete: new DeleteProduct(catalogRepo, catalogRepo, unitOfWork, audit),
+        get: new GetProduct(catalogRepo, taxCalculator),
+        listAdmin: new ListProductsAdmin(catalogRepo),
+        replaceOptions: new ReplaceProductOptions(
+          catalogRepo,
+          catalogRepo,
+          unitOfWork,
+          audit,
+          identifiers,
+        ),
+      },
+      variants: {
+        add: new AddVariant(
+          catalogRepo,
+          catalogRepo,
+          unitOfWork,
+          audit,
+          identifiers,
+          skuGenerator,
+        ),
+        update: new UpdateVariant(catalogRepo, catalogRepo, unitOfWork, audit),
+        delete: new DeleteVariant(catalogRepo, catalogRepo, unitOfWork, audit),
+      },
+      images: {
+        upload: new UploadProductImages(
+          catalogRepo,
+          unitOfWork,
+          audit,
+          identifiers,
+          imageProcessor,
+          imageStorage,
+        ),
+        update: new UpdateProductImage(catalogRepo, catalogRepo, unitOfWork, audit),
+        assignProductCover: new AssignProductCover(catalogRepo, catalogRepo, unitOfWork, audit),
+        assignVariantCover: new AssignVariantCover(catalogRepo, catalogRepo, unitOfWork, audit),
+        setVariantCarousel: new SetVariantCarousel(catalogRepo, catalogRepo, unitOfWork, audit),
+        delete: new DeleteProductImage(
+          catalogRepo,
+          catalogRepo,
+          unitOfWork,
+          audit,
+          imageStorage,
+        ),
+        serve: new ServeImage(catalogRepo, imageStorage),
+      },
+      public: {
+        list: new ListPublicCatalog(catalogRepo, taxCalculator),
+        get: new GetPublicProduct(catalogRepo, taxCalculator),
+      },
     },
     unitOfWork,
     outboxProcessor: new ProcessOutbox(outbox, new NodemailerEmailSender(),
