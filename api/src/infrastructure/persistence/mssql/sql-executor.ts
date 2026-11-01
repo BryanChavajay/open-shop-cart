@@ -1,4 +1,4 @@
-import type { ConnectionPool, ISqlType, Request } from "mssql";
+import type { ConnectionPool, ISqlType, Request, Transaction } from "mssql";
 import { mapSqlError } from "./sql-error.js";
 
 /** Fila devuelta por SQL Server, indexada por el alias de cada columna. */
@@ -49,6 +49,16 @@ export class PoolSqlExecutor implements SqlExecutor {
 
   async execute(procedure: string, params: SqlParam[]): Promise<SqlResult> {
     try { return await runProcedure(this.pool.request(), procedure, params); }
+    catch (error: unknown) { throw mapSqlError(error); }
+  }
+}
+
+/** Ejecuta procedimientos sobre una transacción activa: fija la misma conexión. */
+export class TransactionSqlExecutor implements SqlExecutor {
+  constructor(private readonly transaction: Transaction) {}
+
+  async execute(procedure: string, params: SqlParam[]): Promise<SqlResult> {
+    try { return await runProcedure(this.transaction.request(), procedure, params); }
     catch (error: unknown) { throw mapSqlError(error); }
   }
 }
