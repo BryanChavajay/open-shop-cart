@@ -7,6 +7,7 @@ import type {
   AuditRepository,
   ListAuditEntriesFilter,
 } from "../../../../domain/audit/interfaces/repositories/audit.repository.js";
+import type { CommandExecutor } from "../../../../domain/shared/interfaces/providers/sql-executor.js";
 import {
   firstRow,
   readDate,
@@ -87,7 +88,39 @@ function toAuditDetail(row: SqlRow): AuditDetailReadModel {
 export class MssqlAuditRepository implements AuditRepository {
   constructor(private readonly executor: SqlExecutor) {}
 
-  async append(entry: AuditEntry): Promise<void> {
+  /**
+   * Registra la entrada. Con `executor` el SP corre en la transacción del
+   * llamador (mismo bloque atómico que el cambio de negocio); sin executor
+   * usa la sesión propia del repositorio.
+   */
+  async append(entry: AuditEntry, executor?: CommandExecutor): Promise<void> {
+    const statement = (session: CommandExecutor) =>
+      session.execute(PROCEDURES.append, [
+        { name: "IDUsuario", type: sql.Int, value: entry.userId },
+        { name: "IDModulo", type: sql.SmallInt, value: entry.moduleCode },
+        { name: "TipoEntidad", type: sql.NVarChar(50), value: entry.entityType },
+        {
+          name: "IdentificadorEntidad",
+          type: sql.NVarChar(50),
+          value: entry.entityIdentifier,
+        },
+        { name: "Accion", type: sql.NVarChar(20), value: entry.action },
+        {
+          name: "ValoresAnteriores",
+          type: sql.NVarChar(sql.MAX),
+          value: toJson(entry.previousValues),
+        },
+        {
+          name: "ValoresNuevos",
+          type: sql.NVarChar(sql.MAX),
+          value: toJson(entry.newValues),
+        },
+      ]);
+
+    if (executor !== undefined) {
+      await statement(executor);
+      return;
+    }
     await this.executor.execute(PROCEDURES.append, [
       { name: "IDUsuario", type: sql.Int, value: entry.userId },
       { name: "IDModulo", type: sql.SmallInt, value: entry.moduleCode },
