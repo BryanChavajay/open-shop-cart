@@ -2,6 +2,7 @@ import type { AuditEntry } from "../../entities/audit-entry.entity.js";
 import type { AuditDetailReadModel } from "../../readmodels/audit-detail.read-model.js";
 import type { AuditListItemReadModel } from "../../readmodels/audit-list-item.read-model.js";
 import type { PaginatedReadModel } from "../../../shared/readmodels/paginated.read-model.js";
+import type { CommandExecutor } from "../../../shared/interfaces/providers/sql-executor.js";
 
 export interface ListAuditEntriesFilter {
   /** Filtrado por módulo de negocio. Null para incluir todos los módulos. */
@@ -15,7 +16,7 @@ export interface ListAuditEntriesFilter {
  */
 export interface AuditRepository {
   /** Registra una entrada nueva. La bitácora es append-only. */
-  append(entry: AuditEntry): Promise<void>;
+  append(entry: AuditEntry, executor?: CommandExecutor): Promise<void>;
   list(filter: ListAuditEntriesFilter): Promise<PaginatedReadModel<AuditListItemReadModel>>;
   findById(id: string): Promise<AuditDetailReadModel | null>;
 }

@@ -35,4 +35,22 @@ export enum ErrorCode {
   CONCURRENT_MODIFICATION = "CONCURRENT_MODIFICATION",
   /** El registro de bitácora indicado no existe. */
   AUDIT_ENTRY_NOT_FOUND = "AUDIT_ENTRY_NOT_FOUND",
+  /** The current state of a catalog entity does not allow the operation. */
+  INVALID_CATALOG_ENTITY_STATE = "INVALID_CATALOG_ENTITY_STATE",
+  /** A catalog entity cannot be activated because a required related collection is empty. */
+  EMPTY_CATALOG_COLLECTION = "EMPTY_CATALOG_COLLECTION",
+  /** Another active catalog entity (category/brand) already uses the name. */
+  DUPLICATE_CATALOG_NAME = "DUPLICATE_CATALOG_NAME",
+  /** The SKU already belongs to another variant, even a deleted one. */
+  DUPLICATE_SKU = "DUPLICATE_SKU",
+  /** The variant already has the same combination of option values. */
+  DUPLICATE_VARIANT_COMBO = "DUPLICATE_VARIANT_COMBO",
+  /** The option already has a value with the same text. */
+  DUPLICATE_OPTION_VALUE = "DUPLICATE_OPTION_VALUE",
+  /** The uploaded image exceeds the allowed size. */
+  IMAGE_TOO_LARGE = "IMAGE_TOO_LARGE",
+  /** The uploaded image format is not supported. */
+  UNSUPPORTED_IMAGE_FORMAT = "UNSUPPORTED_IMAGE_FORMAT",
+  /** The uploaded image bytes are corrupted or unreadable. */
+  CORRUPTED_IMAGE = "CORRUPTED_IMAGE",
 }
