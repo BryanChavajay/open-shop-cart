@@ -17,6 +17,8 @@ import { DeactivateUser } from "../application/users/deactivate-user.js";
 import { DeleteUser } from "../application/users/delete-user.js";
 import { GetUser } from "../application/users/get-user.js";
 import { ListUsers } from "../application/users/list-users.js";
+import { ListAuditEntries } from "../application/audit/list-audit-entries.js";
+import { GetAuditEntry } from "../application/audit/get-audit-entry.js";
 import { BootstrapAdministrator } from "../application/users/bootstrap-administrator.js";
 import { StartPasswordRecovery } from "../application/users/start-password-recovery.js";
 import { ResendConfirmation } from "../application/users/resend-confirmation.js";
@@ -28,6 +30,8 @@ import { MssqlUserRepository } from "../infrastructure/persistence/mssql/reposit
 import { MssqlAuthorizationTokenRepository } from "../infrastructure/persistence/mssql/repositories/mssql-authorization-token.repository.js";
 import { MssqlRefreshTokenRepository } from "../infrastructure/persistence/mssql/repositories/mssql-refresh-token.repository.js";
 import { MssqlEmailOutboxRepository } from "../infrastructure/persistence/mssql/repositories/mssql-email-outbox.repository.js";
+import { MssqlAuditRepository } from "../infrastructure/persistence/mssql/repositories/mssql-audit.repository.js";
+import { MssqlUnitOfWork } from "../infrastructure/persistence/mssql/mssql-unit-of-work.js";
 import { ValkeyUserCache } from "../infrastructure/cache/valkey/valkey-user-cache.js";
 import { JoseTokenService } from "../infrastructure/security/jwt-providers/jose-token-service.js";
 import { Argon2PasswordHasher } from "../infrastructure/security/password-hashers/argon2-password-hasher.js";
@@ -54,6 +58,9 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
   const authorizationTokens = new MssqlAuthorizationTokenRepository(executor);
   const outbox = new MssqlEmailOutboxRepository(executor);
   const refreshTokens = new MssqlRefreshTokenRepository(executor);
+  // Append-only audit log; shared with audited business modules.
+  const audit = new MssqlAuditRepository(executor);
+  const unitOfWork = new MssqlUnitOfWork(pool);
 
   return {
     identity: { tokens: tokenService, users, cache },
@@ -80,6 +87,11 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
       resetPassword: new ResetPassword(users, authorizationTokens, identifiers, opaqueTokenGenerator, passwordHasher, clock, cache, env.EMAIL_SERVICE_ENABLED),
       confirmAccount: new ConfirmAccount(users, authorizationTokens, identifiers, opaqueTokenGenerator, clock, cache),
     },
+    audit: {
+      list: new ListAuditEntries(audit),
+      get: new GetAuditEntry(audit),
+    },
+    unitOfWork,
     outboxProcessor: new ProcessOutbox(outbox, new NodemailerEmailSender(),
       secretCipher, clock, {
       [AuthorizationPurpose.ACCOUNT_CONFIRMATION]: new URL("/confirm-account", env.FRONTEND_HOST).toString(),
