@@ -33,4 +33,6 @@ export enum ErrorCode {
   CLIENT_MANAGEMENT_NOT_ALLOWED = "CLIENT_MANAGEMENT_NOT_ALLOWED",
   /** El registro fue modificado por otra operación concurrente. */
   CONCURRENT_MODIFICATION = "CONCURRENT_MODIFICATION",
+  /** El registro de bitácora indicado no existe. */
+  AUDIT_ENTRY_NOT_FOUND = "AUDIT_ENTRY_NOT_FOUND",
 }
