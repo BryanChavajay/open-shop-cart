@@ -39,6 +39,12 @@ const envSchema = z.object({
   // Catalog image binaries (relative to the process cwd or an absolute path)
   IMAGES_STORAGE_DIR: z.string().min(1).default("storage/catalog-images"),
 
+  // Inventory: seconds between reservation expiry worker cycles
+  RESERVATION_EXPIRY_INTERVAL_SECONDS: z.coerce.number().positive().default(60),
+
+  // Cart: inactivity days to consider an active cart abandoned
+  CART_ABANDONMENT_INACTIVITY_DAYS: z.coerce.number().int().positive().default(15),
+
   // Email (Gmail SMTP with an application password)
   GMAIL_USER: z.email(),
   GMAIL_APP_PASSWORD: z.string().min(1),
