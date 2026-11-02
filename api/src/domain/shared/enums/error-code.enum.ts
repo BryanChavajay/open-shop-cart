@@ -107,4 +107,8 @@ export enum ErrorCode {
   INVALID_PAYMENT_DETAILS = "INVALID_PAYMENT_DETAILS",
   /** The checkout was started with no quotable items. */
   EMPTY_CHECKOUT_ITEMS = "EMPTY_CHECKOUT_ITEMS",
+  /** The order cannot be cancelled by this actor in its current state. */
+  ORDER_CANCELLATION_NOT_ALLOWED = "ORDER_CANCELLATION_NOT_ALLOWED",
+  /** The requested return quantity exceeds the purchased quantity of the line. */
+  ORDER_RETURN_EXCEEDS_PURCHASED = "ORDER_RETURN_EXCEEDS_PURCHASED",
 }
