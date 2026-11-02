@@ -91,4 +91,20 @@ export enum ErrorCode {
   COUPON_NOT_APPLICABLE_TO_ITEMS = "COUPON_NOT_APPLICABLE_TO_ITEMS",
   /** Another coupon is already applied, and stacking is not allowed. */
   MULTIPLE_COUPONS_NOT_ALLOWED = "MULTIPLE_COUPONS_NOT_ALLOWED",
+  /** The delivery address does not exist, is deleted or belongs to another customer. */
+  ADDRESS_NOT_FOUND = "ADDRESS_NOT_FOUND",
+  /** The department addressed by a geography endpoint does not exist. */
+  DEPARTMENT_NOT_FOUND = "DEPARTMENT_NOT_FOUND",
+  /** The municipality referenced by an address does not exist. */
+  INVALID_MUNICIPALITY = "INVALID_MUNICIPALITY",
+  /** The order addressed by an operation does not exist or is not owned by the requester. */
+  ORDER_NOT_FOUND = "ORDER_NOT_FOUND",
+  /** The current order or payment state does not allow the requested operation. */
+  INVALID_ORDER_STATE = "INVALID_ORDER_STATE",
+  /** The card payment was declined by the payment processor. */
+  PAYMENT_DECLINED = "PAYMENT_DECLINED",
+  /** The payment is missing the mandatory evidence for the chosen method. */
+  INVALID_PAYMENT_DETAILS = "INVALID_PAYMENT_DETAILS",
+  /** The checkout was started with no quotable items. */
+  EMPTY_CHECKOUT_ITEMS = "EMPTY_CHECKOUT_ITEMS",
 }
