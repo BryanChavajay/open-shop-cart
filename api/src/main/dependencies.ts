@@ -112,6 +112,8 @@ import { MssqlCouponRepository } from "../infrastructure/persistence/mssql/repos
 import { MssqlAddressRepository } from "../infrastructure/persistence/mssql/repositories/mssql-address.repository.js";
 import { MssqlCheckoutRepository } from "../infrastructure/persistence/mssql/repositories/mssql-checkout.repository.js";
 import { MssqlOrderRepository } from "../infrastructure/persistence/mssql/repositories/mssql-order.repository.js";
+import { MssqlReportsRepository } from "../infrastructure/persistence/mssql/repositories/mssql-reports.repository.js";
+import { createReportsUseCases } from "../application/reports/reports-use-cases.js";
 import { MssqlUnitOfWork } from "../infrastructure/persistence/mssql/mssql-unit-of-work.js";
 import { ValkeyUserCache } from "../infrastructure/cache/valkey/valkey-user-cache.js";
 import { JoseTokenService } from "../infrastructure/security/jwt-providers/jose-token-service.js";
@@ -185,6 +187,10 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
     env.SHIPPING_RATE_GT_CAPITAL,
     env.SHIPPING_RATE_GT_DEPARTMENTS,
   );
+
+  // --- Reports: read-only dashboard metrics (RF-08) ---
+  const reportsRepo = new MssqlReportsRepository(executor);
+  const reportsBundle = createReportsUseCases(reportsRepo);
 
   // Bundles referenced by other use cases before the outer return value:
   const inventoryBundle: InventoryUseCases = {
@@ -463,6 +469,7 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
         ),
       },
     },
+    reports: reportsBundle,
     unitOfWork,
     outboxProcessor: new ProcessOutbox(outbox, new NodemailerEmailSender(),
       secretCipher, clock, {

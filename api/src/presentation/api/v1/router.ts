@@ -21,6 +21,7 @@ import type { CouponUseCases } from "../../../application/coupons/coupon-use-cas
 import type { AddressUseCases } from "../../../application/addresses/address-use-cases.js";
 import type { CheckoutUseCases } from "../../../application/checkout/checkout-use-cases.js";
 import type { OrderUseCases } from "../../../application/orders/orders-use-cases.js";
+import type { ReportsUseCases } from "../../../application/reports/reports-use-cases.js";
 import type { Identity } from "./middleware/guard.middleware.js";
 
 export interface RouterDependencies {
@@ -34,6 +35,8 @@ export interface RouterDependencies {
   addresses: AddressUseCases;
   checkout: CheckoutUseCases;
   orders: OrderUseCases;
+  /** Read-only analytics/reporting use cases (RF-08). */
+  reports: ReportsUseCases;
   identity: Identity;
   secureCookies: boolean;
 }
