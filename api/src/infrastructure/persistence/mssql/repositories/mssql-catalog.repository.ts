@@ -56,6 +56,7 @@ const PROCEDURES = {
   listProductsAdmin: "SP_Catalogo_ProductosListarAdmin",
   listPublicProducts: "SP_Catalogo_ProductosListarPublico",
   softDeleteProduct: "SP_Catalogo_ProductosEliminar",
+  findReservedQuantities: "SP_Inventario_CantidadReservadaDeVariantes",
   saveVariant: "SP_Catalogo_VariantesGuardar",
   findVariantByPublicId: "SP_Catalogo_VariantesObtenerPorIDPublico",
   listVariantsOfProduct: "SP_Catalogo_VariantesListarDeProducto",
@@ -702,6 +703,25 @@ export class MssqlCatalogRepository implements CatalogWriteRepository, CatalogRe
     ]);
     const row = firstRow(result.recordset);
     return row === null ? null : toVariantState(row);
+  }
+
+  async findReservedQuantities(
+    executor: CommandExecutor | null,
+    variantInternalIds: number[],
+    asOf: string,
+  ): Promise<Map<number, number>> {
+    const uniqueIds = Array.from(new Set(variantInternalIds));
+    const reserved = new Map<number, number>(uniqueIds.map((id) => [id, 0]));
+    if (uniqueIds.length === 0) return reserved;
+    const result = await (executor ?? this.executor).execute(PROCEDURES.findReservedQuantities, [
+      { name: "IDVariantesInternos", type: sql.NVarChar(sql.MAX), value: uniqueIds.join(",") },
+      { name: "FechaAsOf", type: sql.DateTime2(3), value: asOf },
+    ]);
+    // Variants with no reservation lines keep the pre-seeded zero.
+    for (const row of result.recordset) {
+      reserved.set(readNumber(row, "IDVariante"), readNumber(row, "ExistenciaReservada"));
+    }
+    return reserved;
   }
 
   async listVariantsOfProduct(productInternalId: number): Promise<VariantState[]> {
