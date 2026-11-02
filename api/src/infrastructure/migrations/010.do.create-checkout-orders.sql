@@ -217,7 +217,7 @@ BEGIN
   SET NOCOUNT ON;
 
   IF @JSONLineas IS NULL
-    OR TRY_CONVERT(json, @JSONLineas) IS NULL
+    OR ISJSON(@JSONLineas) = 0
     OR NOT EXISTS (
       SELECT 1
       FROM OPENJSON(@JSONLineas) WITH (

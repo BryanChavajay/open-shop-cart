@@ -335,7 +335,7 @@ BEGIN
   FROM dbo.InventarioReservasDetalle rd
     JOIN dbo.InventarioReservas r ON r.IDReserva = rd.IDReserva
     JOIN dbo.ProductosVariantes v WITH (UPDLOCK, HOLDLOCK) ON v.IDVariante = rd.IDVariante
-  WHERE rd.IDVariante IN (SELECT IDVariante FROM @IDs)
+  WHERE v.IDPublico IN (SELECT IDPublico FROM @IDs)
     AND r.Estado = 'ACTIVE'
     AND r.FechaVencimiento > @FechaAsOf
   GROUP BY rd.IDVariante, v.IDPublico;
