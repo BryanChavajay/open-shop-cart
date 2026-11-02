@@ -3,6 +3,7 @@ import type {
   OrderReadRepository,
   OrderSummaryPage,
 } from "../../domain/orders/interfaces/repositories/order.repository.js";
+import type { PaginatedReadModel } from "../../domain/shared/readmodels/paginated.read-model.js";
 import type { OrderStatus } from "../../domain/checkout/enums/order-status.enum.js";
 import type { OrderActor } from "./shared/dependencies.js";
 
@@ -24,13 +25,29 @@ export class ListOwnOrders {
 
   async execute(
     query: ListOwnOrdersQuery,
-  ): Promise<OrderSummaryPage<CustomerOrderSummaryRow>> {
-    return this.orderReads.listByCustomer(query.actor.id, {
+  ): Promise<PaginatedReadModel<CustomerOrderSummaryRow>> {
+    const page = await this.orderReads.listByCustomer(query.actor.id, {
       ...(query.orderStatus !== undefined && {
         orderStatus: query.orderStatus,
       }),
       page: query.page,
       pageSize: query.pageSize,
     });
+    return this.toPaginated(page, query.page, query.pageSize);
+  }
+
+  /** Maps the `{ rows, totalRegisters }` page to the shared pagination shape. */
+  private toPaginated(
+    page: OrderSummaryPage<CustomerOrderSummaryRow>,
+    pageNumber: number,
+    pageSize: number,
+  ): PaginatedReadModel<CustomerOrderSummaryRow> {
+    return {
+      items: page.rows,
+      page: pageNumber,
+      pageSize,
+      totalItems: page.totalRegisters,
+      totalPages: pageSize > 0 ? Math.ceil(page.totalRegisters / pageSize) : 0,
+    };
   }
 }
