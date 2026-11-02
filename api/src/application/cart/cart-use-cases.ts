@@ -17,9 +17,15 @@ export type {
   AbandonedCartRow,
   AbandonedCartListItem,
 } from "../../domain/cart/interfaces/repositories/cart.repository.js";
-export type { RegisterCartActivityCommand, CartActivityResult } from "./register-cart-activity.js";
+export type {
+  RegisterCartActivityCommand,
+  CartActivityResult,
+} from "./register-cart-activity.js";
 export type { EmptyCartCommand, EmptyCartResult } from "./empty-cart.js";
-export type { ConvertCartCommand, ConvertedCartReadModel } from "./convert-cart.js";
+export type {
+  ConvertCartCommand,
+  ConvertedCartReadModel,
+} from "./convert-cart.js";
 export type { ListAbandonedCartsQuery } from "./list-abandoned-carts.js";
 export {
   ABANDONED_CARTS_DEFAULT_PAGE,

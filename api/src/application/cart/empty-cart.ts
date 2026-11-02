@@ -1,5 +1,8 @@
 import { Cart } from "../../domain/cart/entities/cart.entity.js";
-import type { CartReadRepository, CartWriteRepository } from "../../domain/cart/interfaces/repositories/cart.repository.js";
+import type {
+  CartReadRepository,
+  CartWriteRepository,
+} from "../../domain/cart/interfaces/repositories/cart.repository.js";
 import type { OpaqueTokenGenerator } from "../../domain/shared/interfaces/providers/opaque-token-generator.js";
 import type { Clock } from "../../domain/shared/interfaces/providers/clock.js";
 import type { UnitOfWork } from "../shared/unit-of-work.js";

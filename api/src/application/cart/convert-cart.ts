@@ -1,5 +1,8 @@
 import { Cart } from "../../domain/cart/entities/cart.entity.js";
-import type { CartReadRepository, CartWriteRepository } from "../../domain/cart/interfaces/repositories/cart.repository.js";
+import type {
+  CartReadRepository,
+  CartWriteRepository,
+} from "../../domain/cart/interfaces/repositories/cart.repository.js";
 import type { OpaqueTokenGenerator } from "../../domain/shared/interfaces/providers/opaque-token-generator.js";
 import type { Clock } from "../../domain/shared/interfaces/providers/clock.js";
 import type { CommandExecutor } from "../../domain/shared/interfaces/providers/sql-executor.js";
@@ -61,7 +64,10 @@ export class ConvertCart {
           undefined,
         );
       }
-      const snapshot = await this.reads.findActiveByTokenHash(exec, this.tokens.hash(token));
+      const snapshot = await this.reads.findActiveByTokenHash(
+        exec,
+        this.tokens.hash(token),
+      );
       if (snapshot === null) {
         throw new BusinessRuleViolation(
           "The cart does not exist or is not active",
