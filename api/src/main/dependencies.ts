@@ -67,6 +67,15 @@ import { RegisterCartActivity } from "../application/cart/register-cart-activity
 import { EmptyCart } from "../application/cart/empty-cart.js";
 import { ConvertCart } from "../application/cart/convert-cart.js";
 import { ListAbandonedCarts } from "../application/cart/list-abandoned-carts.js";
+import { CreateCoupon } from "../application/coupons/create-coupon.js";
+import { UpdateCoupon } from "../application/coupons/update-coupon.js";
+import { ActivateCoupon } from "../application/coupons/activate-coupon.js";
+import { DeactivateCoupon } from "../application/coupons/deactivate-coupon.js";
+import { DeleteCoupon } from "../application/coupons/delete-coupon.js";
+import { GetCoupon } from "../application/coupons/get-coupon.js";
+import { ListCoupons } from "../application/coupons/list-coupons.js";
+import { EvaluateCoupon } from "../application/coupons/evaluate-coupon.js";
+import { RedeemCoupon } from "../application/coupons/redeem-coupon.js";
 import { AuthorizationPurpose } from "../domain/auth/enums/authorization-purpose.enum.js";
 import type { UserCache } from "../domain/users/interfaces/cache/user-cache.js";
 import { PoolSqlExecutor } from "../infrastructure/persistence/mssql/sql-executor.js";
@@ -78,6 +87,7 @@ import { MssqlAuditRepository } from "../infrastructure/persistence/mssql/reposi
 import { MssqlCatalogRepository } from "../infrastructure/persistence/mssql/repositories/mssql-catalog.repository.js";
 import { MssqlInventoryRepository } from "../infrastructure/persistence/mssql/repositories/mssql-inventory.repository.js";
 import { MssqlCartRepository } from "../infrastructure/persistence/mssql/repositories/mssql-cart.repository.js";
+import { MssqlCouponRepository } from "../infrastructure/persistence/mssql/repositories/mssql-coupon.repository.js";
 import { MssqlUnitOfWork } from "../infrastructure/persistence/mssql/mssql-unit-of-work.js";
 import { ValkeyUserCache } from "../infrastructure/cache/valkey/valkey-user-cache.js";
 import { JoseTokenService } from "../infrastructure/security/jwt-providers/jose-token-service.js";
@@ -89,6 +99,7 @@ import { InitialsSkuGenerator } from "../infrastructure/identifiers/initials-sku
 import { SharpImageProcessor } from "../infrastructure/images/sharp-image-processor.js";
 import { LocalImageStorage } from "../infrastructure/images/local-image-storage.js";
 import { IvaTaxCalculator } from "../infrastructure/pricing/iva-tax-calculator.js";
+import { DefaultDiscountStrategyRegistry } from "../infrastructure/pricing/discount-strategy.registry.js";
 import { SystemClock } from "../infrastructure/clock/system-clock.js";
 import { NodemailerEmailSender } from "../infrastructure/email/nodemailer-email-sender.js";
 
@@ -127,6 +138,11 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
 
   // --- Carrito: un único repositorio para el carrito de invitado ---
   const cartRepo = new MssqlCartRepository(executor);
+
+  // --- Coupons: a single repository serves reads and writes ---
+  const couponRepo = new MssqlCouponRepository(executor);
+  // Stateless strategies held once in the shared registry.
+  const discountStrategies = new DefaultDiscountStrategyRegistry();
 
   return {
     identity: { tokens: tokenService, users, cache },
@@ -290,6 +306,19 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
           env.CART_ABANDONMENT_INACTIVITY_DAYS,
         ),
       },
+    },
+    coupons: {
+      // CATEGORY scope resolves the category through the catalog reads.
+      create: new CreateCoupon(catalogRepo, couponRepo, unitOfWork, audit, identifiers),
+      update: new UpdateCoupon(couponRepo, catalogRepo, couponRepo, unitOfWork, audit),
+      activate: new ActivateCoupon(couponRepo, couponRepo, unitOfWork, audit),
+      deactivate: new DeactivateCoupon(couponRepo, couponRepo, unitOfWork, audit),
+      delete: new DeleteCoupon(couponRepo, couponRepo, unitOfWork, audit),
+      get: new GetCoupon(couponRepo),
+      list: new ListCoupons(couponRepo),
+      // Discount-only simulation over the shared registry of strategies.
+      evaluate: new EvaluateCoupon(couponRepo, clock, discountStrategies),
+      redeem: new RedeemCoupon(couponRepo, couponRepo, unitOfWork, audit, identifiers, clock, discountStrategies),
     },
     unitOfWork,
     outboxProcessor: new ProcessOutbox(outbox, new NodemailerEmailSender(),
