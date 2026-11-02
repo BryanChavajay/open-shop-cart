@@ -42,8 +42,18 @@ const envSchema = z.object({
   // Inventory: seconds between reservation expiry worker cycles
   RESERVATION_EXPIRY_INTERVAL_SECONDS: z.coerce.number().positive().default(60),
 
-  // Cart: inactivity days to consider an active cart abandoned
+  // Carrito: días de inactividad para considerar abandonado un carrito activo
   CART_ABANDONMENT_INACTIVITY_DAYS: z.coerce.number().int().positive().default(15),
+
+  // Checkout: flat shipping rates by destination area (quetzales, IVA excluded
+  // — shipping is not a taxable good in this scope)
+  SHIPPING_RATE_GT_CAPITAL: z.coerce.number().nonnegative().default(25),
+  SHIPPING_RATE_GT_DEPARTMENTS: z.coerce.number().nonnegative().default(35),
+
+  // Card payments: Stripe PaymentIntents when the key is provided; otherwise
+  // the deterministic sandbox processor answers so the flow still works.
+  STRIPE_SECRET_KEY: z.string().min(1).optional(),
+  STRIPE_CURRENCY: z.string().min(3).max(3).lowercase().default("gtq"),
 
   // Email (Gmail SMTP with an application password)
   GMAIL_USER: z.email(),
