@@ -60,6 +60,17 @@ export interface CatalogReadRepository {
   findProductDetailByPublicId(publicId: string): Promise<AdminProductReadModel | null>;
   listProductsAdmin(filters: AdminProductFilter): Promise<PaginatedReadModel<AdminProductListItemReadModel>>;
   listPublicProducts(filters: PublicCatalogFilter): Promise<PaginatedReadModel<PublicProductListItemReadModel>>;
+  /**
+   * Reserved units per variant internal id for ACTIVE, unexpired reservations
+   * at `asOf`, computed inside SQL with a lock-free read (public catalog read
+   * model; variants with no reservation lines map to zero). `executor` null
+   * reads with the repository's own executor, outside any transaction.
+   */
+  findReservedQuantities(
+    executor: CommandExecutor | null,
+    variantInternalIds: number[],
+    asOf: string,
+  ): Promise<Map<number, number>>;
   findVariantByPublicId(publicId: string): Promise<VariantState | null>;
   listVariantsOfProduct(productInternalId: number): Promise<VariantState[]>;
   listComboValues(variantInternalId: number): Promise<VariantComboValue[]>;

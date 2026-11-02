@@ -53,4 +53,20 @@ export enum ErrorCode {
   UNSUPPORTED_IMAGE_FORMAT = "UNSUPPORTED_IMAGE_FORMAT",
   /** The uploaded image bytes are corrupted or unreadable. */
   CORRUPTED_IMAGE = "CORRUPTED_IMAGE",
+  /** The variant or stock resource addressed by a stock endpoint does not exist. */
+  STOCK_NOT_FOUND = "STOCK_NOT_FOUND",
+  /** The requested quantity exceeds the available stock. */
+  INSUFFICIENT_STOCK = "INSUFFICIENT_STOCK",
+  /** The change would leave the physical stock negative or below active reservations. */
+  INSUFFICIENT_PHYSICAL_STOCK = "INSUFFICIENT_PHYSICAL_STOCK",
+  /** The stock reservation addressed by the operation does not exist. */
+  STOCK_RESERVATION_NOT_FOUND = "STOCK_RESERVATION_NOT_FOUND",
+  /** The reservation state does not allow the requested operation. */
+  STOCK_RESERVATION_INVALID_STATE = "STOCK_RESERVATION_INVALID_STATE",
+  /** The reservation deadline has already passed, so it cannot be consumed. */
+  STOCK_RESERVATION_EXPIRED = "STOCK_RESERVATION_EXPIRED",
+  /** The idempotency key was reused with different content. */
+  IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT",
+  /** The variant still has physical stock or active reservations, blocking deletion. */
+  VARIANT_HAS_STOCK = "VARIANT_HAS_STOCK",
 }
