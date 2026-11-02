@@ -63,6 +63,10 @@ import { ConsumeStockReservation } from "../application/inventory/consume-stock-
 import { ExpireStockReservations } from "../application/inventory/expire-stock-reservations.js";
 import { ReintegrateCancelledSale } from "../application/inventory/reintegrate-cancelled-sale.js";
 import { ReintegrateReturnedStock } from "../application/inventory/reintegrate-returned-stock.js";
+import { RegisterCartActivity } from "../application/cart/register-cart-activity.js";
+import { EmptyCart } from "../application/cart/empty-cart.js";
+import { ConvertCart } from "../application/cart/convert-cart.js";
+import { ListAbandonedCarts } from "../application/cart/list-abandoned-carts.js";
 import { AuthorizationPurpose } from "../domain/auth/enums/authorization-purpose.enum.js";
 import type { UserCache } from "../domain/users/interfaces/cache/user-cache.js";
 import { PoolSqlExecutor } from "../infrastructure/persistence/mssql/sql-executor.js";
@@ -73,6 +77,7 @@ import { MssqlEmailOutboxRepository } from "../infrastructure/persistence/mssql/
 import { MssqlAuditRepository } from "../infrastructure/persistence/mssql/repositories/mssql-audit.repository.js";
 import { MssqlCatalogRepository } from "../infrastructure/persistence/mssql/repositories/mssql-catalog.repository.js";
 import { MssqlInventoryRepository } from "../infrastructure/persistence/mssql/repositories/mssql-inventory.repository.js";
+import { MssqlCartRepository } from "../infrastructure/persistence/mssql/repositories/mssql-cart.repository.js";
 import { MssqlUnitOfWork } from "../infrastructure/persistence/mssql/mssql-unit-of-work.js";
 import { ValkeyUserCache } from "../infrastructure/cache/valkey/valkey-user-cache.js";
 import { JoseTokenService } from "../infrastructure/security/jwt-providers/jose-token-service.js";
@@ -119,6 +124,9 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
 
   // --- Inventario: un único repositorio sirve lecturas y escrituras ---
   const inventoryRepo = new MssqlInventoryRepository(executor);
+
+  // --- Carrito: un único repositorio para el carrito de invitado ---
+  const cartRepo = new MssqlCartRepository(executor);
 
   return {
     identity: { tokens: tokenService, users, cache },
@@ -248,6 +256,39 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
       returns: {
         reintegrateCancellation: new ReintegrateCancelledSale(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
         reintegrateReturn: new ReintegrateReturnedStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+      },
+    },
+    cart: {
+      activity: {
+        register: new RegisterCartActivity(
+          cartRepo,
+          cartRepo,
+          unitOfWork,
+          opaqueTokenGenerator,
+          identifiers,
+          clock,
+        ),
+      },
+      empty: new EmptyCart(
+        cartRepo,
+        cartRepo,
+        unitOfWork,
+        opaqueTokenGenerator,
+        clock,
+      ),
+      convert: new ConvertCart(
+        cartRepo,
+        cartRepo,
+        unitOfWork,
+        opaqueTokenGenerator,
+        clock,
+      ),
+      reports: {
+        listAbandoned: new ListAbandonedCarts(
+          cartRepo,
+          clock,
+          env.CART_ABANDONMENT_INACTIVITY_DAYS,
+        ),
       },
     },
     unitOfWork,
