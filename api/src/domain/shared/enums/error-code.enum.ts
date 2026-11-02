@@ -69,4 +69,8 @@ export enum ErrorCode {
   IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT",
   /** The variant still has physical stock or active reservations, blocking deletion. */
   VARIANT_HAS_STOCK = "VARIANT_HAS_STOCK",
+  /** The cart addressed by the operation does not exist or is not active. */
+  CART_NOT_FOUND = "CART_NOT_FOUND",
+  /** The current state of a cart does not allow the operation. */
+  INVALID_CART_STATE = "INVALID_CART_STATE",
 }
