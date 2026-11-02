@@ -12,6 +12,7 @@ import type { CatalogActor } from "./shared/dependencies.js";
 import { auditEntryForCatalog } from "./shared/audit.js";
 import { requireInternalId } from "./shared/entity-ids.js";
 import { findVariantWithProduct } from "./shared/variant-with-product.js";
+import type { InventoryReadRepository } from "../../domain/inventory/interfaces/repositories/inventory.repository.js";
 
 export interface DeleteVariantCommand {
   actor: CatalogActor;
@@ -22,8 +23,9 @@ export interface DeleteVariantCommand {
 /**
  * Soft-deletes a variant (its SKU is never released or reused). Refused when
  * the variant is the only active, non-deleted variant of an ACTIVE product:
- * the product must be deactivated first. Deleting an already deleted variant
- * reports NotFoundError.
+ * the product must be deactivated first. Also refused while the variant still
+ * holds physical stock or active reservations: the inventory must be emptied
+ * first. Deleting an already deleted variant reports NotFoundError.
  */
 export class DeleteVariant {
   constructor(
@@ -31,6 +33,7 @@ export class DeleteVariant {
     private readonly writes: CatalogWriteRepository,
     private readonly unitOfWork: UnitOfWork,
     private readonly audit: AuditRepository,
+    private readonly inventory: InventoryReadRepository,
   ) {}
 
   async execute(command: DeleteVariantCommand): Promise<void> {
@@ -53,6 +56,24 @@ export class DeleteVariant {
     }
 
     const variant = Variant.restore(variantState);
+
+      // Stock guard INSIDE the transaction: the read locks the variant row so
+      // a concurrent inventory mutation of the same variant serializes with
+      // this delete instead of racing it.
+      if (
+        await this.inventory.hasStockOrActiveReservations(
+          exec,
+          [variantInternalId],
+          new Date().toISOString(),
+        )
+      ) {
+        throw new ConflictError(
+          "Variant has physical stock or active reservations",
+          ErrorCode.VARIANT_HAS_STOCK,
+          undefined,
+          undefined,
+        );
+      }
 
       await this.writes.softDeleteVariant(exec, variantInternalId);
       await this.audit.append(

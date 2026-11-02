@@ -66,13 +66,22 @@ export async function assemblePublicProduct(reads: CatalogReadRepository, tax: T
   const productId = requireInternalId(state.id);
   const optionList = await reads.listOptionsOfProduct(productId);
   const variants = (await reads.listVariantsOfProduct(productId)).filter((variant) => variant.isActive);
+  // Reserved units are fetched once for the whole batch (not per variant):
+  // availability over the wire is physical stock minus the units still held by
+  // ACTIVE, unexpired reservations at the evaluation instant.
+  const reserved = await reads.findReservedQuantities(
+    null,
+    variants.map((variant) => requireInternalId(variant.id)),
+    new Date().toISOString(),
+  );
   const publicVariants = [];
   for (const variant of variants) {
-    const media = await coverAndGallery(reads, requireInternalId(variant.id), variant.coverImageId);
+    const variantInternalId = requireInternalId(variant.id);
+    const media = await coverAndGallery(reads, variantInternalId, variant.coverImageId);
     publicVariants.push({ ...media, publicId: variant.publicId, name: variant.name,
       priceIncludingTax: Number(tax.addTax(toDecimalString(variant.unitPrice))),
-      isAvailable: variant.existenciaFisica > 0,
-      optionValues: combo(await reads.listComboValues(requireInternalId(variant.id)), optionList) });
+      isAvailable: variant.existenciaFisica - (reserved.get(variantInternalId) ?? 0) >= 1,
+      optionValues: combo(await reads.listComboValues(variantInternalId), optionList) });
   }
   return { publicId: detail.publicId, name: detail.name, description: detail.description,
     coverImage: toImage(state.coverImageId ? await reads.findImageByInternalId(state.coverImageId) : null),
