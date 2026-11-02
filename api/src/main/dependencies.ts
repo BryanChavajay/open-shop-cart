@@ -87,6 +87,14 @@ import { InitiateCheckout } from "../application/checkout/initiate-checkout.js";
 import { ReleaseCheckoutReservation } from "../application/checkout/release-checkout-reservation.js";
 import { ConfirmCheckout } from "../application/checkout/confirm-checkout.js";
 import { VerifyBankTransferPayment } from "../application/checkout/verify-bank-transfer-payment.js";
+import { ListOwnOrders } from "../application/orders/list-own-orders.js";
+import { GetOwnOrderDetail } from "../application/orders/get-own-order-detail.js";
+import { CancelOwnOrder } from "../application/orders/cancel-own-order.js";
+import { ListAdminOrders } from "../application/orders/list-admin-orders.js";
+import { GetAdminOrderDetail } from "../application/orders/get-admin-order-detail.js";
+import { TransitionOrderStatus } from "../application/orders/transition-order-status.js";
+import { CancelOrderByStaff } from "../application/orders/cancel-order-staff.js";
+import { RegisterOrderReturn } from "../application/orders/register-order-return.js";
 import { DefaultPaymentStrategyRegistry } from "../infrastructure/payments/payment-strategy.registry.js";
 import { createDefaultShippingRates } from "../application/checkout/shared/shipping.js";
 import { AuthorizationPurpose } from "../domain/auth/enums/authorization-purpose.enum.js";
@@ -103,6 +111,7 @@ import { MssqlCartRepository } from "../infrastructure/persistence/mssql/reposit
 import { MssqlCouponRepository } from "../infrastructure/persistence/mssql/repositories/mssql-coupon.repository.js";
 import { MssqlAddressRepository } from "../infrastructure/persistence/mssql/repositories/mssql-address.repository.js";
 import { MssqlCheckoutRepository } from "../infrastructure/persistence/mssql/repositories/mssql-checkout.repository.js";
+import { MssqlOrderRepository } from "../infrastructure/persistence/mssql/repositories/mssql-order.repository.js";
 import { MssqlUnitOfWork } from "../infrastructure/persistence/mssql/mssql-unit-of-work.js";
 import { ValkeyUserCache } from "../infrastructure/cache/valkey/valkey-user-cache.js";
 import { JoseTokenService } from "../infrastructure/security/jwt-providers/jose-token-service.js";
@@ -166,6 +175,8 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
 
   // --- Checkout/orders: quotes, frozen writes and payment verification ---
   const checkoutRepo = new MssqlCheckoutRepository(executor);
+  // One repository serves both the order read side and the order write side.
+  const orderRepo = new MssqlOrderRepository(executor);
   const paymentStrategies = new DefaultPaymentStrategyRegistry(
     env.STRIPE_SECRET_KEY,
     env.STRIPE_CURRENCY,
@@ -406,6 +417,51 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
         clock,
         audit,
       ),
+    },
+    orders: {
+      own: {
+        list: new ListOwnOrders(orderRepo),
+        get: new GetOwnOrderDetail(orderRepo),
+        cancel: new CancelOwnOrder(
+          checkoutRepo,
+          checkoutRepo,
+          orderRepo,
+          { reintegrateCancellation: inventoryBundle.returns.reintegrateCancellation },
+          unitOfWork,
+          clock,
+          audit,
+        ),
+      },
+      admin: {
+        list: new ListAdminOrders(orderRepo),
+        get: new GetAdminOrderDetail(orderRepo),
+        transition: new TransitionOrderStatus(
+          checkoutRepo,
+          checkoutRepo,
+          orderRepo,
+          unitOfWork,
+          clock,
+          audit,
+        ),
+        cancel: new CancelOrderByStaff(
+          checkoutRepo,
+          checkoutRepo,
+          orderRepo,
+          { reintegrateCancellation: inventoryBundle.returns.reintegrateCancellation },
+          unitOfWork,
+          clock,
+          audit,
+        ),
+        returns: new RegisterOrderReturn(
+          checkoutRepo,
+          orderRepo,
+          orderRepo,
+          { reintegrateReturn: inventoryBundle.returns.reintegrateReturn },
+          unitOfWork,
+          clock,
+          audit,
+        ),
+      },
     },
     unitOfWork,
     outboxProcessor: new ProcessOutbox(outbox, new NodemailerEmailSender(),

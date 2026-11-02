@@ -9,6 +9,7 @@ import { createCartRouter } from "./cart/router.js";
 import { createCouponsRouter } from "./coupons/router.js";
 import { createAddressesRouter } from "./addresses/router.js";
 import { createCheckoutRouter } from "./checkout/router.js";
+import { createOrdersRouter } from "./orders/router.js";
 import { createReportsRouter } from "./reports/router.js";
 import type { Authentication } from "../../../application/auth/authentication.js";
 import type { UserUseCases } from "../../../application/users/user-use-cases.js";
@@ -19,6 +20,7 @@ import type { CartUseCases } from "../../../application/cart/cart-use-cases.js";
 import type { CouponUseCases } from "../../../application/coupons/coupon-use-cases.js";
 import type { AddressUseCases } from "../../../application/addresses/address-use-cases.js";
 import type { CheckoutUseCases } from "../../../application/checkout/checkout-use-cases.js";
+import type { OrderUseCases } from "../../../application/orders/orders-use-cases.js";
 import type { Identity } from "./middleware/guard.middleware.js";
 
 export interface RouterDependencies {
@@ -31,6 +33,7 @@ export interface RouterDependencies {
   coupons: CouponUseCases;
   addresses: AddressUseCases;
   checkout: CheckoutUseCases;
+  orders: OrderUseCases;
   identity: Identity;
   secureCookies: boolean;
 }
@@ -45,8 +48,12 @@ export function createV1Router(deps: RouterDependencies): Router {
   router.use("/", createInventoryRouter(deps.inventory, deps.identity));
   router.use("/cart", createCartRouter(deps));
   router.use("/coupons", createCouponsRouter(deps.coupons, deps.identity));
-  router.use("/addresses", createAddressesRouter(deps.addresses, deps.identity));
+  router.use(
+    "/addresses",
+    createAddressesRouter(deps.addresses, deps.identity),
+  );
   router.use("/checkout", createCheckoutRouter(deps.checkout, deps.identity));
+  router.use("/orders", createOrdersRouter(deps.orders, deps.identity));
   router.use("/reports", createReportsRouter(deps));
   return router;
 }
