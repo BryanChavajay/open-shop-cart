@@ -73,4 +73,22 @@ export enum ErrorCode {
   CART_NOT_FOUND = "CART_NOT_FOUND",
   /** The current state of a cart does not allow the operation. */
   INVALID_CART_STATE = "INVALID_CART_STATE",
+  /** The coupon addressed by the operation does not exist. */
+  COUPON_NOT_FOUND = "COUPON_NOT_FOUND",
+  /** Another non-deleted coupon already uses the same code. */
+  DUPLICATE_COUPON_CODE = "DUPLICATE_COUPON_CODE",
+  /** The current state of a coupon does not allow the operation. */
+  INVALID_COUPON_STATE = "INVALID_COUPON_STATE",
+  /** The coupon is inactive, deleted or outside its validity window. */
+  COUPON_INACTIVE_OR_EXPIRED = "COUPON_INACTIVE_OR_EXPIRED",
+  /** The cart total does not reach the minimum purchase required by the coupon. */
+  COUPON_MIN_PURCHASE_NOT_MET = "COUPON_MIN_PURCHASE_NOT_MET",
+  /** The coupon reached its total redemption limit. */
+  COUPON_USAGE_LIMIT_EXHAUSTED = "COUPON_USAGE_LIMIT_EXHAUSTED",
+  /** The customer reached the coupon's per-customer redemption limit. */
+  COUPON_CUSTOMER_LIMIT_EXHAUSTED = "COUPON_CUSTOMER_LIMIT_EXHAUSTED",
+  /** No eligible item in the evaluation context matches the coupon scope. */
+  COUPON_NOT_APPLICABLE_TO_ITEMS = "COUPON_NOT_APPLICABLE_TO_ITEMS",
+  /** Another coupon is already applied, and stacking is not allowed. */
+  MULTIPLE_COUPONS_NOT_ALLOWED = "MULTIPLE_COUPONS_NOT_ALLOWED",
 }
