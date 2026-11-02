@@ -76,6 +76,19 @@ import { GetCoupon } from "../application/coupons/get-coupon.js";
 import { ListCoupons } from "../application/coupons/list-coupons.js";
 import { EvaluateCoupon } from "../application/coupons/evaluate-coupon.js";
 import { RedeemCoupon } from "../application/coupons/redeem-coupon.js";
+import { ListDepartments } from "../application/addresses/list-departments.js";
+import { ListMunicipalities } from "../application/addresses/list-municipalities.js";
+import { CreateAddress } from "../application/addresses/create-address.js";
+import { ListOwnAddresses } from "../application/addresses/list-own-addresses.js";
+import { GetOwnAddress } from "../application/addresses/get-own-address.js";
+import { UpdateOwnAddress } from "../application/addresses/update-own-address.js";
+import { DeleteOwnAddress } from "../application/addresses/delete-own-address.js";
+import { InitiateCheckout } from "../application/checkout/initiate-checkout.js";
+import { ReleaseCheckoutReservation } from "../application/checkout/release-checkout-reservation.js";
+import { ConfirmCheckout } from "../application/checkout/confirm-checkout.js";
+import { VerifyBankTransferPayment } from "../application/checkout/verify-bank-transfer-payment.js";
+import { DefaultPaymentStrategyRegistry } from "../infrastructure/payments/payment-strategy.registry.js";
+import { createDefaultShippingRates } from "../application/checkout/shared/shipping.js";
 import { AuthorizationPurpose } from "../domain/auth/enums/authorization-purpose.enum.js";
 import type { UserCache } from "../domain/users/interfaces/cache/user-cache.js";
 import { PoolSqlExecutor } from "../infrastructure/persistence/mssql/sql-executor.js";
@@ -88,6 +101,8 @@ import { MssqlCatalogRepository } from "../infrastructure/persistence/mssql/repo
 import { MssqlInventoryRepository } from "../infrastructure/persistence/mssql/repositories/mssql-inventory.repository.js";
 import { MssqlCartRepository } from "../infrastructure/persistence/mssql/repositories/mssql-cart.repository.js";
 import { MssqlCouponRepository } from "../infrastructure/persistence/mssql/repositories/mssql-coupon.repository.js";
+import { MssqlAddressRepository } from "../infrastructure/persistence/mssql/repositories/mssql-address.repository.js";
+import { MssqlCheckoutRepository } from "../infrastructure/persistence/mssql/repositories/mssql-checkout.repository.js";
 import { MssqlUnitOfWork } from "../infrastructure/persistence/mssql/mssql-unit-of-work.js";
 import { ValkeyUserCache } from "../infrastructure/cache/valkey/valkey-user-cache.js";
 import { JoseTokenService } from "../infrastructure/security/jwt-providers/jose-token-service.js";
@@ -102,6 +117,8 @@ import { IvaTaxCalculator } from "../infrastructure/pricing/iva-tax-calculator.j
 import { DefaultDiscountStrategyRegistry } from "../infrastructure/pricing/discount-strategy.registry.js";
 import { SystemClock } from "../infrastructure/clock/system-clock.js";
 import { NodemailerEmailSender } from "../infrastructure/email/nodemailer-email-sender.js";
+import type { InventoryUseCases } from "../application/inventory/inventory-use-cases.js";
+import type { CartUseCases } from "../application/cart/cart-use-cases.js";
 
 const noCache: UserCache = { async get() { return null; }, async set() {}, async delete() {} };
 
@@ -143,6 +160,78 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
   const couponRepo = new MssqlCouponRepository(executor);
   // Stateless strategies held once in the shared registry.
   const discountStrategies = new DefaultDiscountStrategyRegistry();
+
+  // --- Addresses: geography lookup plus owned-address CRUD ---
+  const addressRepo = new MssqlAddressRepository(executor);
+
+  // --- Checkout/orders: quotes, frozen writes and payment verification ---
+  const checkoutRepo = new MssqlCheckoutRepository(executor);
+  const paymentStrategies = new DefaultPaymentStrategyRegistry(
+    env.STRIPE_SECRET_KEY,
+    env.STRIPE_CURRENCY,
+  );
+  const shippingRates = createDefaultShippingRates(
+    env.SHIPPING_RATE_GT_CAPITAL,
+    env.SHIPPING_RATE_GT_DEPARTMENTS,
+  );
+
+  // Bundles referenced by other use cases before the outer return value:
+  const inventoryBundle: InventoryUseCases = {
+    purchases: {
+      receive: new ReceivePurchaseStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+    },
+    adjustments: {
+      apply: new AdjustStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+    },
+    queries: {
+      get: new GetVariantStock(inventoryRepo, clock),
+      list: new ListInventory(inventoryRepo),
+      kardex: new ListVariantKardex(inventoryRepo, clock),
+    },
+    reservations: {
+      reserve: new ReserveStock(inventoryRepo, inventoryRepo, unitOfWork, identifiers, clock),
+      release: new ReleaseStockReservation(inventoryRepo, inventoryRepo, unitOfWork, clock),
+      consume: new ConsumeStockReservation(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+      expire: new ExpireStockReservations(inventoryRepo, inventoryRepo, unitOfWork, clock),
+    },
+    returns: {
+      reintegrateCancellation: new ReintegrateCancelledSale(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+      reintegrateReturn: new ReintegrateReturnedStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+    },
+  };
+  const cartBundle: CartUseCases = {
+    activity: {
+      register: new RegisterCartActivity(
+        cartRepo,
+        cartRepo,
+        unitOfWork,
+        opaqueTokenGenerator,
+        identifiers,
+        clock,
+      ),
+    },
+    empty: new EmptyCart(
+      cartRepo,
+      cartRepo,
+      unitOfWork,
+      opaqueTokenGenerator,
+      clock,
+    ),
+    convert: new ConvertCart(
+      cartRepo,
+      cartRepo,
+      unitOfWork,
+      opaqueTokenGenerator,
+      clock,
+    ),
+    reports: {
+      listAbandoned: new ListAbandonedCarts(
+        cartRepo,
+        clock,
+        env.CART_ABANDONMENT_INACTIVITY_DAYS,
+      ),
+    },
+  };
 
   return {
     identity: { tokens: tokenService, users, cache },
@@ -251,62 +340,8 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
         get: new GetPublicProduct(catalogRepo, taxCalculator),
       },
     },
-    inventory: {
-      purchases: {
-        receive: new ReceivePurchaseStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
-      },
-      adjustments: {
-        apply: new AdjustStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
-      },
-      queries: {
-        get: new GetVariantStock(inventoryRepo, clock),
-        list: new ListInventory(inventoryRepo),
-        kardex: new ListVariantKardex(inventoryRepo, clock),
-      },
-      reservations: {
-        reserve: new ReserveStock(inventoryRepo, inventoryRepo, unitOfWork, identifiers, clock),
-        release: new ReleaseStockReservation(inventoryRepo, inventoryRepo, unitOfWork, clock),
-        consume: new ConsumeStockReservation(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
-        expire: new ExpireStockReservations(inventoryRepo, inventoryRepo, unitOfWork, clock),
-      },
-      returns: {
-        reintegrateCancellation: new ReintegrateCancelledSale(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
-        reintegrateReturn: new ReintegrateReturnedStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
-      },
-    },
-    cart: {
-      activity: {
-        register: new RegisterCartActivity(
-          cartRepo,
-          cartRepo,
-          unitOfWork,
-          opaqueTokenGenerator,
-          identifiers,
-          clock,
-        ),
-      },
-      empty: new EmptyCart(
-        cartRepo,
-        cartRepo,
-        unitOfWork,
-        opaqueTokenGenerator,
-        clock,
-      ),
-      convert: new ConvertCart(
-        cartRepo,
-        cartRepo,
-        unitOfWork,
-        opaqueTokenGenerator,
-        clock,
-      ),
-      reports: {
-        listAbandoned: new ListAbandonedCarts(
-          cartRepo,
-          clock,
-          env.CART_ABANDONMENT_INACTIVITY_DAYS,
-        ),
-      },
-    },
+    inventory: inventoryBundle,
+    cart: cartBundle,
     coupons: {
       // CATEGORY scope resolves the category through the catalog reads.
       create: new CreateCoupon(catalogRepo, couponRepo, unitOfWork, audit, identifiers),
@@ -319,6 +354,58 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
       // Discount-only simulation over the shared registry of strategies.
       evaluate: new EvaluateCoupon(couponRepo, clock, discountStrategies),
       redeem: new RedeemCoupon(couponRepo, couponRepo, unitOfWork, audit, identifiers, clock, discountStrategies),
+    },
+    addresses: {
+      geo: {
+        listDepartments: new ListDepartments(addressRepo),
+        listMunicipalities: new ListMunicipalities(addressRepo),
+      },
+      own: {
+        create: new CreateAddress(addressRepo, addressRepo, unitOfWork, identifiers, clock),
+        list: new ListOwnAddresses(addressRepo),
+        get: new GetOwnAddress(addressRepo),
+        update: new UpdateOwnAddress(addressRepo, addressRepo, unitOfWork),
+        delete: new DeleteOwnAddress(addressRepo, unitOfWork),
+      },
+    },
+    checkout: {
+      initiate: new InitiateCheckout(
+        checkoutRepo,
+        addressRepo,
+        { reserve: inventoryBundle.reservations.reserve },
+        { evaluate: new EvaluateCoupon(couponRepo, clock, discountStrategies) },
+        shippingRates,
+        taxCalculator,
+        identifiers,
+      ),
+      release: new ReleaseCheckoutReservation(
+        inventoryRepo,
+        { release: inventoryBundle.reservations.release },
+      ),
+      confirm: new ConfirmCheckout(
+        checkoutRepo,
+        checkoutRepo,
+        addressRepo,
+        inventoryRepo,
+        { consume: inventoryBundle.reservations.consume },
+        { redeem: new RedeemCoupon(couponRepo, couponRepo, unitOfWork, audit, identifiers, clock, discountStrategies) },
+        { convert: cartBundle.convert },
+        paymentStrategies,
+        shippingRates,
+        taxCalculator,
+        unitOfWork,
+        audit,
+        identifiers,
+        clock,
+      ),
+      verification: new VerifyBankTransferPayment(
+        checkoutRepo,
+        checkoutRepo,
+        { reintegrateCancellation: inventoryBundle.returns.reintegrateCancellation },
+        unitOfWork,
+        clock,
+        audit,
+      ),
     },
     unitOfWork,
     outboxProcessor: new ProcessOutbox(outbox, new NodemailerEmailSender(),
