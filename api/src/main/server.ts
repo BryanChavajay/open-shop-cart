@@ -77,14 +77,35 @@ async function start(): Promise<void> {
 
   tick();
 
+  // Expiry worker: same overlap-guarded pattern as the outbox tick; one cycle
+  // claims up to EXPIRY_BATCH_SIZE (50) expired reservations per run.
+  let expiryRunning: Promise<void> | undefined;
+
+  const expiryTick = () => {
+    if (stopping || expiryRunning) return;
+    expiryRunning = dependencies.inventory.reservations.expire
+      .execute({ limit: 50 })
+      .then(() => {})
+      .catch((error) => console.error("Error expirando reservas de stock", error))
+      .finally(() => {
+        expiryRunning = undefined;
+      });
+  };
+
+  const expiryTimer = setInterval(expiryTick, env.RESERVATION_EXPIRY_INTERVAL_SECONDS * 1000);
+
+  expiryTick();
+
   const shutdown = async () => {
     if (stopping) return;
     stopping = true;
     clearInterval(timer);
+    clearInterval(expiryTimer);
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
     await running;
+    await expiryRunning;
     client?.disconnect();
     await closeMssqlPool();
   };

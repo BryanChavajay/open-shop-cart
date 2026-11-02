@@ -52,6 +52,17 @@ import { ServeImage } from "../application/catalog/serve-image.js";
 import { AssignProductCover, AssignVariantCover, SetVariantCarousel } from "../application/catalog/assign-image.js";
 import { ListPublicCatalog } from "../application/catalog/list-public-catalog.js";
 import { GetPublicProduct } from "../application/catalog/get-public-product.js";
+import { ReceivePurchaseStock } from "../application/inventory/receive-purchase-stock.js";
+import { AdjustStock } from "../application/inventory/adjust-stock.js";
+import { GetVariantStock } from "../application/inventory/get-variant-stock.js";
+import { ListInventory } from "../application/inventory/list-inventory.js";
+import { ListVariantKardex } from "../application/inventory/list-variant-kardex.js";
+import { ReserveStock } from "../application/inventory/reserve-stock.js";
+import { ReleaseStockReservation } from "../application/inventory/release-stock-reservation.js";
+import { ConsumeStockReservation } from "../application/inventory/consume-stock-reservation.js";
+import { ExpireStockReservations } from "../application/inventory/expire-stock-reservations.js";
+import { ReintegrateCancelledSale } from "../application/inventory/reintegrate-cancelled-sale.js";
+import { ReintegrateReturnedStock } from "../application/inventory/reintegrate-returned-stock.js";
 import { AuthorizationPurpose } from "../domain/auth/enums/authorization-purpose.enum.js";
 import type { UserCache } from "../domain/users/interfaces/cache/user-cache.js";
 import { PoolSqlExecutor } from "../infrastructure/persistence/mssql/sql-executor.js";
@@ -61,6 +72,7 @@ import { MssqlRefreshTokenRepository } from "../infrastructure/persistence/mssql
 import { MssqlEmailOutboxRepository } from "../infrastructure/persistence/mssql/repositories/mssql-email-outbox.repository.js";
 import { MssqlAuditRepository } from "../infrastructure/persistence/mssql/repositories/mssql-audit.repository.js";
 import { MssqlCatalogRepository } from "../infrastructure/persistence/mssql/repositories/mssql-catalog.repository.js";
+import { MssqlInventoryRepository } from "../infrastructure/persistence/mssql/repositories/mssql-inventory.repository.js";
 import { MssqlUnitOfWork } from "../infrastructure/persistence/mssql/mssql-unit-of-work.js";
 import { ValkeyUserCache } from "../infrastructure/cache/valkey/valkey-user-cache.js";
 import { JoseTokenService } from "../infrastructure/security/jwt-providers/jose-token-service.js";
@@ -97,14 +109,16 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
   const unitOfWork = new MssqlUnitOfWork(pool);
 
   // --- Catálogo: repositorio (lectura/escritura) y proveedores propios ---
-  const catalogRepo = new MssqlCatalogRepository(executor);
-  const skuGenerator = new InitialsSkuGenerator();
+  const catalogRepo = new MssqlCatalogRepository(executor);  const skuGenerator = new InitialsSkuGenerator();
   const taxCalculator = new IvaTaxCalculator();
   const imageProcessor = new SharpImageProcessor();
   const imagesDirectory = isAbsolute(env.IMAGES_STORAGE_DIR)
     ? env.IMAGES_STORAGE_DIR
-    : resolve(process.cwd(), env.IMAGES_STORAGE_DIR);
+    :     resolve(process.cwd(), env.IMAGES_STORAGE_DIR);
   const imageStorage = new LocalImageStorage(imagesDirectory);
+
+  // --- Inventario: un único repositorio sirve lecturas y escrituras ---
+  const inventoryRepo = new MssqlInventoryRepository(executor);
 
   return {
     identity: { tokens: tokenService, users, cache },
@@ -163,7 +177,7 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
         update: new UpdateProduct(catalogRepo, catalogRepo, unitOfWork, audit),
         activate: new ActivateProduct(catalogRepo, catalogRepo, unitOfWork, audit),
         deactivate: new DeactivateProduct(catalogRepo, catalogRepo, unitOfWork, audit),
-        delete: new DeleteProduct(catalogRepo, catalogRepo, unitOfWork, audit),
+        delete: new DeleteProduct(catalogRepo, catalogRepo, unitOfWork, audit, inventoryRepo),
         get: new GetProduct(catalogRepo, taxCalculator),
         listAdmin: new ListProductsAdmin(catalogRepo),
         replaceOptions: new ReplaceProductOptions(
@@ -184,7 +198,7 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
           skuGenerator,
         ),
         update: new UpdateVariant(catalogRepo, catalogRepo, unitOfWork, audit),
-        delete: new DeleteVariant(catalogRepo, catalogRepo, unitOfWork, audit),
+        delete: new DeleteVariant(catalogRepo, catalogRepo, unitOfWork, audit, inventoryRepo),
       },
       images: {
         upload: new UploadProductImages(
@@ -211,6 +225,29 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
       public: {
         list: new ListPublicCatalog(catalogRepo, taxCalculator),
         get: new GetPublicProduct(catalogRepo, taxCalculator),
+      },
+    },
+    inventory: {
+      purchases: {
+        receive: new ReceivePurchaseStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+      },
+      adjustments: {
+        apply: new AdjustStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+      },
+      queries: {
+        get: new GetVariantStock(inventoryRepo, clock),
+        list: new ListInventory(inventoryRepo),
+        kardex: new ListVariantKardex(inventoryRepo, clock),
+      },
+      reservations: {
+        reserve: new ReserveStock(inventoryRepo, inventoryRepo, unitOfWork, identifiers, clock),
+        release: new ReleaseStockReservation(inventoryRepo, inventoryRepo, unitOfWork, clock),
+        consume: new ConsumeStockReservation(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+        expire: new ExpireStockReservations(inventoryRepo, inventoryRepo, unitOfWork, clock),
+      },
+      returns: {
+        reintegrateCancellation: new ReintegrateCancelledSale(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
+        reintegrateReturn: new ReintegrateReturnedStock(inventoryRepo, inventoryRepo, unitOfWork, audit, identifiers, clock),
       },
     },
     unitOfWork,
