@@ -52,6 +52,8 @@ const envSchema = z.object({
 
   // Card payments: Stripe PaymentIntents when the key is provided; otherwise
   // the deterministic sandbox processor answers so the flow still works.
+  // false: the checkout rejects the CARD method with PAYMENT_METHOD_DISABLED.
+  CARD_PAYMENT_ENABLED: z.enum(["true", "false"]).default("true").transform(value => value === "true"),
   STRIPE_SECRET_KEY: z.string().min(1).optional(),
   STRIPE_CURRENCY: z.string().min(3).max(3).lowercase().default("gtq"),
 

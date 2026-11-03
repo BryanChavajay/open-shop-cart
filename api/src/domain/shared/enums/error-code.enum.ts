@@ -103,6 +103,8 @@ export enum ErrorCode {
   INVALID_ORDER_STATE = "INVALID_ORDER_STATE",
   /** The card payment was declined by the payment processor. */
   PAYMENT_DECLINED = "PAYMENT_DECLINED",
+  /** The requested payment method is disabled by configuration. */
+  PAYMENT_METHOD_DISABLED = "PAYMENT_METHOD_DISABLED",
   /** The payment is missing the mandatory evidence for the chosen method. */
   INVALID_PAYMENT_DETAILS = "INVALID_PAYMENT_DETAILS",
   /** The checkout was started with no quotable items. */

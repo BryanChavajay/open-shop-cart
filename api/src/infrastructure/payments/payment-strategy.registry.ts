@@ -18,15 +18,18 @@ export class DefaultPaymentStrategyRegistry implements PaymentStrategyRegistry {
   private readonly bankTransfer: PaymentStrategy = new BankTransferPaymentStrategy();
   private readonly cashOnDelivery: PaymentStrategy = new CashOnDeliveryPaymentStrategy();
   private readonly card: PaymentStrategy;
+  private readonly cardEnabled: boolean;
 
   constructor(
     stripeSecretKey?: string | null,
     stripeCurrency: string = "gtq",
+    cardEnabled: boolean = true,
   ) {
     this.card = new CardPaymentStrategy(
       stripeSecretKey ?? undefined,
       stripeCurrency.toLowerCase(),
     );
+    this.cardEnabled = cardEnabled;
   }
 
   getStrategy(method: PaymentMethod): PaymentStrategy {
@@ -36,6 +39,14 @@ export class DefaultPaymentStrategyRegistry implements PaymentStrategyRegistry {
       case PaymentMethod.CASH_ON_DELIVERY:
         return this.cashOnDelivery;
       case PaymentMethod.CARD:
+        if (!this.cardEnabled) {
+          throw new BusinessRuleViolation(
+            "Card payments are disabled by configuration",
+            ErrorCode.PAYMENT_METHOD_DISABLED,
+            "payment",
+            undefined,
+          );
+        }
         return this.card;
       default: {
         // Exhaustiveness guard: adding an enum member without a strategy here

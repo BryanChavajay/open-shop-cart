@@ -182,6 +182,7 @@ export function createDependencies(pool: ConnectionPool, client?: Redis) {
   const paymentStrategies = new DefaultPaymentStrategyRegistry(
     env.STRIPE_SECRET_KEY,
     env.STRIPE_CURRENCY,
+    env.CARD_PAYMENT_ENABLED,
   );
   const shippingRates = createDefaultShippingRates(
     env.SHIPPING_RATE_GT_CAPITAL,
