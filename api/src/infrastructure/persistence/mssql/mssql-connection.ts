@@ -5,6 +5,10 @@ import { env } from "../../../config.js";
 const LOCAL_ENVIRONMENT: typeof env.ENVIRONMENT = "local";
 const POOL_MAX_CONNECTIONS = 10;
 const POOL_IDLE_TIMEOUT_MS = 30_000;
+// Timeouts explícitos: dependen del default del driver y silenciosamente
+// cambian entre versiones, dejando consultas colgadas indefinidamente.
+const CONNECTION_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 let poolPromise: Promise<ConnectionPool> | undefined;
 
@@ -16,6 +20,8 @@ function buildConfig(): SqlConfig {
     user: env.MSSQL_USER,
     password: env.MSSQL_PASSWORD,
     database: env.MSSQL_DB,
+    connectionTimeout: CONNECTION_TIMEOUT_MS,
+    requestTimeout: REQUEST_TIMEOUT_MS,
     options: {
       encrypt: true,
       // Local development usa certificados autofirmados.

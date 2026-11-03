@@ -46,7 +46,7 @@ export class ReleaseCheckoutReservation {
     await this.inventory.release.execute({
       actor: { id: command.customerId },
       reservationPublicId,
-      reason: null,
+      reason: "Checkout reservation released by customer",
       joinExecutor: command.joinExecutor ?? null,
     });
   }

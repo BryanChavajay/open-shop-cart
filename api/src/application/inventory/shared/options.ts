@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 /** Stock reservations last this many minutes (maximum accepted by the entity). */
 export const RESERVATION_DURATION_MINUTES = 15;
 
@@ -9,6 +11,15 @@ export const EXPIRY_BATCH_SIZE = 50;
  * input that legitimately differs between retries). Arrays keep their order. */
 export function canonicalFingerprint(payload: unknown): string {
   return JSON.stringify(stableValue(payload));
+}
+
+/** Hex SHA-256 digest (64 chars) of the canonical fingerprint: the form the
+ * checkout receipt stores in `CheckoutOperaciones.HuellaCanonica` — a column
+ * sized for a digest, not for the raw serialized payload. */
+export function canonicalFingerprintDigest(payload: unknown): string {
+  return createHash("sha256")
+    .update(canonicalFingerprint(payload), "utf8")
+    .digest("hex");
 }
 
 function stableValue(value: unknown): unknown {

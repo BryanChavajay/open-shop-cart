@@ -207,7 +207,7 @@ export class ConsumeStockReservation {
           reservationPublicId: reservation.publicId,
           action: ReservationHistoryAction.CONSUMED,
           userId: command.actor.id,
-          reason: null,
+          reason,
           occurredAt: this.clock.now().toISOString(),
         }),
       );

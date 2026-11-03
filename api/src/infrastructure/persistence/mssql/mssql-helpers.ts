@@ -52,10 +52,18 @@ export function readUuid(row: SqlRow, column: string): string {
 
 export function readNumber(row: SqlRow, column: string): number {
   const value = readColumn(row, column);
-  if (typeof value !== "number") {
-    throw new TypeError(`Se esperaba número en la columna ${column}`);
+  if (typeof value === "number") {
+    return value;
   }
-  return value;
+  // The driver always delivers BIGINT columns as text (precision guard), the
+  // same quirk readDecimal tolerates for DECIMAL; only a safe integer parses.
+  if (typeof value === "string" && /^\d+$/.test(value)) {
+    const parsed = Number(value);
+    if (Number.isSafeInteger(parsed)) {
+      return parsed;
+    }
+  }
+  throw new TypeError(`Se esperaba número en la columna ${column}`);
 }
 
 export function readBoolean(row: SqlRow, column: string): boolean {

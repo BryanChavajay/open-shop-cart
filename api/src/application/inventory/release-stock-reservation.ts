@@ -12,8 +12,8 @@ import { ErrorCode } from "../../domain/shared/enums/error-code.enum.js";
 import {
   REASON_MAX_LENGTH,
   requirePublicId,
-  requireOptionalTrimmedText,
   requirePositiveInteger,
+  requireTrimmedText,
 } from "../../domain/inventory/entities/inventory-rules.js";
 import type { UnitOfWork, TransactionScope } from "../shared/unit-of-work.js";
 import { runOrJoin } from "../shared/unit-of-work.js";
@@ -49,11 +49,12 @@ export class ReleaseStockReservation {
       command.reservationPublicId,
       "reservationPublicId",
     );
-    const reason = requireOptionalTrimmedText(
-      command.reason ?? null,
-      "reason",
-      REASON_MAX_LENGTH,
-    );
+    // The ledger constraint mandates a reason for human actions; the caller
+    // may document richer text, otherwise a default is recorded.
+    const reason =
+      command.reason === null || command.reason === undefined
+        ? `Release of reservation ${reservationPublicId}`
+        : requireTrimmedText(command.reason, "reason", REASON_MAX_LENGTH);
     requirePositiveInteger(command.actor.id, "actor.id");
 
     const scope: TransactionScope<void> = async (exec) => {

@@ -22,6 +22,9 @@ import { ErrorCode } from "../../../domain/shared/enums/error-code.enum.js";
 export class CardPaymentStrategy implements PaymentStrategy {
   readonly method = PaymentMethod.CARD as const;
 
+  /** Without a deadline a hanging TLS handshake would park the checkout. */
+  static readonly STRIPE_TIMEOUT_MS = 15_000;
+
   constructor(
     private readonly stripeSecretKey: string | undefined,
     private readonly currency: string,
@@ -86,6 +89,7 @@ export class CardPaymentStrategy implements PaymentStrategy {
       });
       const response = await fetch("https://api.stripe.com/v1/payment_intents", {
         method: "POST",
+        signal: AbortSignal.timeout(CardPaymentStrategy.STRIPE_TIMEOUT_MS),
         headers: {
           Authorization: `Bearer ${this.stripeSecretKey!}`,
           "Content-Type": "application/x-www-form-urlencoded",

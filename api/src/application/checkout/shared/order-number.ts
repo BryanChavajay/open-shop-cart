@@ -1,5 +1,4 @@
-import { BusinessRuleViolation } from "../../../domain/shared/errors/business-error.js";
-import { ErrorCode } from "../../../domain/shared/enums/error-code.enum.js";
+import { randomInt } from "node:crypto";
 
 /** Serial of the day, e.g. "0A7F" or "000B". */
 export interface OrderNumberMeta {
@@ -17,31 +16,24 @@ export function formatDateMeta(now: Date): string {
   return `${year}${month}${day}`;
 }
 
+/** Unambiguous serial alphabet (no 0/O, 1/I) shared with the SKU generator. */
+const SERIAL_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+const SERIAL_LENGTH = 4;
+
 /**
- * Human-readable order number: ORD-YYYYMMDD-XXXX with four random
- * alphanumeric characters. The unique index on NumeroPedido backs the
- * randomness; a collision fails the confirmation and surfaces to the client
- * as a conflict (realistically never encountered with 4 characters).
+ * Human-readable order number: ORD-YYYYMMDD-XXXX with four cryptographically
+ * random characters from the unambiguous alphabet (31^4 ≈ 923k serials a day).
+ * It never derives from seeded ids: the time-ordered UUID v7 used for public
+ * ids shares its first characters across a ~50-day window, so slicing it made
+ * every same-day order collide against the unique index on NumeroPedido. The
+ * index still backs a residual collision as a conflict surfaced to the client.
  */
 export function formatOrderNumber(
   now: Date,
-  seed: string,
 ): string {
-  const serial = normalizeSerial(seed);
-  return `ORD-${formatDateMeta(now)}-${serial}`;
-}
-
-/** Keeps the digits and letters of the seed, uppercase, four characters. */
-function normalizeSerial(seed: string): string {
-  const alphanum = seed.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
-  const candidate = alphanum.slice(0, 4).padStart(4, "0");
-  if (!/^[0-9A-Z]{4}$/.test(candidate)) {
-    throw new BusinessRuleViolation(
-      "The order number seed is empty",
-      ErrorCode.INVALID_INPUT,
-      undefined,
-      undefined,
-    );
+  let serial = "";
+  for (let index = 0; index < SERIAL_LENGTH; index++) {
+    serial += SERIAL_ALPHABET.charAt(randomInt(SERIAL_ALPHABET.length));
   }
-  return candidate;
+  return `ORD-${formatDateMeta(now)}-${serial}`;
 }

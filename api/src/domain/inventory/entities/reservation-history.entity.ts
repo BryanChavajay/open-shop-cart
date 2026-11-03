@@ -83,6 +83,13 @@ export class ReservationHistory {
         "userId",
         undefined,
       );
+    } else if (data.reason === null) {
+      throw new BusinessRuleViolation(
+        "The required field reason was not provided for a manually caused action",
+        ErrorCode.REQUIRED_FIELD_MISSING,
+        "reason",
+        undefined,
+      );
     }
     requireInstant(data.occurredAt, "occurredAt");
     return new ReservationHistory({

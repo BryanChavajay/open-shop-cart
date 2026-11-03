@@ -137,16 +137,22 @@ export class Product {
     }
   }
 
-  /** Publishes only when the product and all active variants have covers. */
+  /**
+   * Activates the product. The cover requirements (product cover, at least
+   * one active variant and a cover for every active variant) were relaxed:
+   * a product may publish even without covers. See docs/features/catalog/spec.md.
+   */
   activate(activeVariantCoverIds: readonly (number | null)[]): void {
     this.assertNotDeleted();
-    if (this.state.coverImageId === null || activeVariantCoverIds.length === 0 ||
-        activeVariantCoverIds.some((id) => id === null)) {
-      throw new BusinessRuleViolation(
-        "Publication requires a product cover, at least one active variant and a cover for every active variant",
-        ErrorCode.EMPTY_CATALOG_COLLECTION, undefined, undefined,
-      );
-    }
+    // Manejo de portadas en la activación, comentado por decisión del equipo:
+    // if (this.state.coverImageId === null || activeVariantCoverIds.length === 0 ||
+    //     activeVariantCoverIds.some((id) => id === null)) {
+    //   throw new BusinessRuleViolation(
+    //     "Publication requires a product cover, at least one active variant and a cover for every active variant",
+    //     ErrorCode.EMPTY_CATALOG_COLLECTION, undefined, undefined,
+    //   );
+    // }
+    void activeVariantCoverIds;
     this.state.isActive = true;
   }
 

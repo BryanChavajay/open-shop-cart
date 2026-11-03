@@ -31,7 +31,7 @@ import { NotFoundError } from "../../domain/shared/errors/not-found.js";
 import { BusinessRuleViolation } from "../../domain/shared/errors/business-error.js";
 import { ErrorCode } from "../../domain/shared/enums/error-code.enum.js";
 import { formatAmount, sumAmounts } from "../coupons/shared/coupon-result.js";
-import { canonicalFingerprint } from "../inventory/shared/options.js";
+import { canonicalFingerprintDigest } from "../inventory/shared/options.js";
 import {
   assertQuotable,
   buildDiscountableItems,
@@ -137,7 +137,7 @@ export class ConfirmCheckout {
     command: ConfirmCheckoutCommand,
   ): Promise<CheckoutConfirmationReadModel> {
     const lines = requireValidLines(command.lines);
-    const fingerprint = canonicalFingerprint({
+    const fingerprint = canonicalFingerprintDigest({
       reservationPublicId: command.reservationPublicId,
       addressPublicId: command.addressPublicId,
       couponCode: command.couponCode ?? null,
@@ -254,7 +254,7 @@ export class ConfirmCheckout {
       const snapshot: OrderSnapshot = {
         id: null,
         publicId: orderPublicId,
-        orderNumber: formatOrderNumber(now, this.identifiers.newPublicId()),
+        orderNumber: formatOrderNumber(now),
         userId: command.customerId,
         addressOriginPublicId: address.publicId,
         reservationId: reservationInternalId,
