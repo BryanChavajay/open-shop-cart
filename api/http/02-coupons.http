@@ -1,0 +1,138 @@
+# =============================================================
+# 02-coupons.http — Rutas de cupones
+# Fuente: presentation/api/v1/coupons/router.ts
+# Roles:
+#   - ADMINISTRADOR: administración (CRUD + activate/deactivate)
+#   - Cualquier usuario autenticado: evaluación de descuento
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@ACCESS-TOKEN = <access-token-del-usuario>
+@CUSTOMER-TOKEN = <access-token-de-cliente>
+@ORIGIN = http://localhost:5173
+
+# --- Referencias capturadas de respuestas anteriores ---
+@COUPON-ID = <couponPublicId-de-la-respuesta-anterior>
+@CATEGORY-ID = <categoryPublicId-de-la-respuesta-anterior>
+@VARIANT-ID = <variantPublicId-de-la-respuesta-anterior>
+
+# -------------------------------------------------------------
+# EVALUACIÓN (cualquier usuario autenticado)
+# -------------------------------------------------------------
+
+### CUPONES — Evaluar cupón sobre líneas del carrito
+# code: 1-64. alreadyAppliedCouponCount por defecto 0 (no se permite apilar cupones).
+# items: min 1 línea. Montos como STRING con exactamente 2 decimales ("25.00", nunca "25").
+POST {{API-V1}}/coupons/evaluate
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+{
+  "code": "BIENVENIDA10",
+  "alreadyAppliedCouponCount": 0,
+  "items": [
+    {
+      "linePublicId": "line-1",
+      "variantPublicId": "{{VARIANT-ID}}",
+      "categoryPublicId": "{{CATEGORY-ID}}",
+      "quantity": 2,
+      "unitPriceGross": "799.99",
+      "subtotalGross": "1599.98"
+    }
+  ]
+}
+
+# -------------------------------------------------------------
+# ADMINISTRACIÓN (ADMINISTRADOR)
+# -------------------------------------------------------------
+
+### CUPONES — Crear cupón
+# discountType: PERCENTAGE (0-100) | FIXED_AMOUNT.
+# scope: CART (categoryPublicId debe ser null) | CATEGORY (categoryPublicId obligatorio).
+# startsAt/endsAt: ISO datetime; endsAt debe ser posterior a startsAt.
+# isActive es fijo al crear; usedCount nunca es editable.
+POST {{API-V1}}/coupons
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "code": "BIENVENIDA10",
+  "discountType": "PERCENTAGE",
+  "discountValue": 10,
+  "scope": "CART",
+  "categoryPublicId": null,
+  "minPurchaseAmount": 500,
+  "maxTotalUses": 1000,
+  "maxUsesPerCustomer": 1,
+  "startsAt": "2026-01-01T00:00:00.000Z",
+  "endsAt": "2026-12-31T23:59:59.999Z",
+  "isActive": true
+}
+
+### CUPONES — Crear cupón de alcance por categoría
+POST {{API-V1}}/coupons
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "code": "CAMARAS50",
+  "discountType": "FIXED_AMOUNT",
+  "discountValue": 50,
+  "scope": "CATEGORY",
+  "categoryPublicId": "{{CATEGORY-ID}}",
+  "minPurchaseAmount": 300,
+  "maxTotalUses": 200,
+  "maxUsesPerCustomer": 2,
+  "startsAt": "2026-06-01T00:00:00.000Z",
+  "endsAt": "2026-06-30T23:59:59.999Z",
+  "isActive": true
+}
+
+### CUPONES — Listar cupones
+# Filtro: onlyActive ("true"/"false"), page=1, pageSize=20 por defecto.
+GET {{API-V1}}/coupons?onlyActive=true&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### CUPONES — Obtener cupón por publicId
+GET {{API-V1}}/coupons/{{COUPON-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### CUPONES — Reemplazar campos comerciales del cupón
+# Reemplazo total de los mismos campos del create (sin isActive ni usedCount).
+PUT {{API-V1}}/coupons/{{COUPON-ID}}
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "code": "BIENVENIDA10",
+  "discountType": "PERCENTAGE",
+  "discountValue": 15,
+  "scope": "CART",
+  "categoryPublicId": null,
+  "minPurchaseAmount": 500,
+  "maxTotalUses": 2000,
+  "maxUsesPerCustomer": 1,
+  "startsAt": "2026-01-01T00:00:00.000Z",
+  "endsAt": "2027-12-31T23:59:59.999Z"
+}
+
+### CUPONES — Activar cupón
+PATCH {{API-V1}}/coupons/{{COUPON-ID}}/activate
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### CUPONES — Desactivar cupón
+PATCH {{API-V1}}/coupons/{{COUPON-ID}}/deactivate
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### CUPONES — Eliminar cupón
+DELETE {{API-V1}}/coupons/{{COUPON-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}

@@ -1,0 +1,161 @@
+# =============================================================
+# 05-checkout.http — Rutas de checkout y cotización
+# Fuente: presentation/api/v1/checkout/router.ts
+# Roles:
+#   - CLIENTE: reserva (reserve), liberación (release) y confirmación (confirm)
+#   - OPERADOR/ADMINISTRADOR: verificación de pago de transferencias
+# Notas:
+#   - `Idempotency-Key` (string 1-100) es OBLIGATORIO en confirm.
+#   - Las cantidades y totales viajan en líneas { variantPublicId (uuid), quantity }.
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@CUSTOMER-TOKEN = <access-token-de-cliente>
+@STAFF-TOKEN = <access-token-de-operador-o-administrador>
+@ORIGIN = http://localhost:5173
+
+# --- Referencias capturadas de respuestas anteriores ---
+@RESERVATION-ID = <reservationPublicId-de-la-respuesta-de-reserve>
+@ORDER-ID = <orderPublicId-de-la-respuesta-de-confirm>
+@ADDRESS-ID = <addressPublicId-de-la-direccion-del-cliente>
+@VARIANT-A = <variantPublicId-1>
+@VARIANT-B = <variantPublicId-2>
+
+# -------------------------------------------------------------
+# 1) RESERVA DE STOCK + COTIZACIÓN (CLIENTE)
+# -------------------------------------------------------------
+
+### CHECKOUT — Iniciar checkout (cotiza + reserva stock)
+# items: min 1 línea. addressPublicId y couponCode opcionales.
+# Responde 201 con cotización (totales con IVA) y reservationPublicId.
+POST {{API-V1}}/checkout/reserve
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+{
+  "items": [
+    { "variantPublicId": "{{VARIANT-A}}", "quantity": 1 },
+    { "variantPublicId": "{{VARIANT-B}}", "quantity": 2 }
+  ],
+  "addressPublicId": "{{ADDRESS-ID}}",
+  "couponCode": "BIENVENIDA10"
+}
+
+### CHECKOUT — Cotización sin dirección ni cupón (variante mínima)
+POST {{API-V1}}/checkout/reserve
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+{
+  "items": [
+    { "variantPublicId": "{{VARIANT-A}}", "quantity": 1 }
+  ]
+}
+
+# -------------------------------------------------------------
+# 2) LIBERACIÓN DE RESERVA (CLIENTE)
+# -------------------------------------------------------------
+
+### CHECKOUT — Liberar la reserva de stock
+# Útil si el cliente abandona el checkout. Responde 204.
+DELETE {{API-V1}}/checkout/reservations/{{RESERVATION-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+# -------------------------------------------------------------
+# 3) CONFIRMACIÓN (CLIENTE) — crea la orden
+# -------------------------------------------------------------
+
+### CHECKOUT — Confirmar checkout con transferencia bancaria
+# reservationPublicId, addressPublicId (obligatorios) e items (min 1).
+# cartToken: opcional (cookie del carrito de la web, máx 200 caracteres).
+# payment BANK_TRANSFER exige bankName y referenceNumber (1-100).
+POST {{API-V1}}/checkout/confirm
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+Idempotency-Key: confirm-cliente-1-20261102
+
+{
+  "reservationPublicId": "{{RESERVATION-ID}}",
+  "addressPublicId": "{{ADDRESS-ID}}",
+  "items": [
+    { "variantPublicId": "{{VARIANT-A}}", "quantity": 1 },
+    { "variantPublicId": "{{VARIANT-B}}", "quantity": 2 }
+  ],
+  "couponCode": "BIENVENIDA10",
+  "cartToken": "<cartToken-de-la-cookie>",
+  "payment": {
+    "method": "BANK_TRANSFER",
+    "bankName": "Banco Industrial",
+    "referenceNumber": "BT-20261102-000456"
+  }
+}
+
+### CHECKOUT — Confirmar checkout con pago contra entrega
+# method CASH_ON_DELIVERY no lleva campos adicionales.
+POST {{API-V1}}/checkout/confirm
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+Idempotency-Key: confirm-cliente-1-cap-20261102
+
+{
+  "reservationPublicId": "{{RESERVATION-ID}}",
+  "addressPublicId": "{{ADDRESS-ID}}",
+  "items": [
+    { "variantPublicId": "{{VARIANT-A}}", "quantity": 1 }
+  ],
+  "payment": {
+    "method": "CASH_ON_DELIVERY"
+  }
+}
+
+### CHECKOUT — Confirmar checkout con tarjeta
+# method CARD exige source (token del medio de pago, 1-255).
+POST {{API-V1}}/checkout/confirm
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+Idempotency-Key: confirm-cliente-1-card-20261102
+
+{
+  "reservationPublicId": "{{RESERVATION-ID}}",
+  "addressPublicId": "{{ADDRESS-ID}}",
+  "items": [
+    { "variantPublicId": "{{VARIANT-A}}", "quantity": 1 }
+  ],
+  "payment": {
+    "method": "CARD",
+    "source": "tok_visa_4242"
+  }
+}
+
+# -------------------------------------------------------------
+# 4) VERIFICACIÓN DE PAGO (OPERADOR/ADMINISTRADOR)
+# -------------------------------------------------------------
+
+### CHECKOUT — Aprobar pago de transferencia (staff)
+# decided: APPROVE | REJECT. En REJECT, el use case exige el reason documentado.
+# La orden queda CONFIRMED (APPROVE) o vuelca stock si se rechaza.
+POST {{API-V1}}/checkout/orders/{{ORDER-ID}}/verify-payment
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+{
+  "decided": "APPROVE"
+}
+
+### CHECKOUT — Rechazar pago de transferencia (staff)
+POST {{API-V1}}/checkout/orders/{{ORDER-ID}}/verify-payment
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+{
+  "decided": "REJECT",
+  "reason": "La boleta no coincide con el monto de la orden"
+}

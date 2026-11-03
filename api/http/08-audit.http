@@ -1,0 +1,31 @@
+# =============================================================
+# 08-audit.http — Rutas de auditoría (solo ADMINISTRADOR)
+# Fuente: presentation/api/v1/audit/router.ts
+# módulos auditables (moduleCode): 10=CATALOG, 20=INVENTORY,
+# 30=COUPONS, 40=ORDERS (ver domain/audit/enums/audit-module.enum.ts)
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@ACCESS-TOKEN = <access-token-de-administrador>
+@ORIGIN = http://localhost:5173
+
+# -------------------------------------------------------------
+# AUDITORÍA (ADMINISTRADOR)
+# -------------------------------------------------------------
+
+### AUDITORÍA — Listar bitácora de auditoría
+# Filtros: moduleCode (10|20|30|40, opcional), page=1, pageSize=20 por defecto (máx 100).
+GET {{API-V1}}/audit?moduleCode=20&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### AUDITORÍA — Listar bitácora sin filtro de módulo
+GET {{API-V1}}/audit?page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### AUDITORÍA — Obtener registro por id numérico
+# id: secuencia entera de la bitácora ("^\\d+$"), no un publicId.
+GET {{API-V1}}/audit/42
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}

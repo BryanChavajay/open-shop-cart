@@ -1,0 +1,121 @@
+# =============================================================
+# 06-orders.http — Rutas de órdenes
+# Fuente: presentation/api/v1/orders/router.ts
+# Roles:
+#   - CLIENTE: listar/detalle/cancelar SUS órdenes
+#   - OPERADOR/ADMINISTRADOR (staff): ciclo logístico bajo el literal /admin
+# -------------------------------------------------------------
+# Ciclo de estados:
+#   PENDING_PAYMENT_VERIFICATION | CONFIRMED | PREPARING | SHIPPED |
+#   DELIVERED | CANCELLED
+# Estados de pago (PaymentStatus): PENDING_VERIFICATION | PENDING_ON_DELIVERY |
+#   PAID | REJECTED | REFUNDED
+# `targetStatus` solo admite: PREPARING | SHIPPED | DELIVERED
+# -------------------------------------------------------------
+# Nota: los literales "/admin" van registrados antes de "/:orderPublicId".
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@CUSTOMER-TOKEN = <access-token-de-cliente>
+@STAFF-TOKEN = <access-token-de-operador-o-administrador>
+@ORIGIN = http://localhost:5173
+
+# --- Referencias capturadas de respuestas anteriores ---
+@ORDER-ID = <orderPublicId-de-la-respuesta-anterior>
+@LINE-ID = <linePublicId-de-una-linea-de-la-orden>
+
+# -------------------------------------------------------------
+# CICLO LOGÍSTICO (staff, literal /admin)
+# -------------------------------------------------------------
+
+### ÓRDENES (STAFF) — Listar órdenes administrativas
+# Filtros: orderStatus, paymentStatus, customerPublicId, search (1-254),
+# from/to ISO datetime, page=1, pageSize=20 por defecto.
+GET {{API-V1}}/orders/admin?orderStatus=CONFIRMED&paymentStatus=PAID&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+### ÓRDENES (STAFF) — Listar por cliente y rango de fechas
+GET {{API-V1}}/orders/admin?customerPublicId=<customerPublicId>&from=2026-01-01T00:00:00.000Z&to=2026-12-31T23:59:59.999Z&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+### ÓRDENES (STAFF) — Obtener orden por publicId
+GET {{API-V1}}/orders/admin/{{ORDER-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+### ÓRDENES (STAFF) — Transición de estado de la orden
+# targetStatus: PREPARING | SHIPPED | DELIVERED (solo hacia adelante).
+# reason: documentación opcional (máx 300). Flujo de ejemplo:
+#   CONFIRMED -> PREPARING -> SHIPPED -> DELIVERED.
+PATCH {{API-V1}}/orders/admin/{{ORDER-ID}}/status
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+{
+  "targetStatus": "PREPARING",
+  "reason": "Pago verificado, línea de producción"
+}
+
+### ÓRDENES (STAFF) — Cancelar orden (staff)
+# reason OBLIGATORIO (1-300): queda como evidencia de auditoría.
+POST {{API-V1}}/orders/admin/{{ORDER-ID}}/cancel
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+{
+  "reason": "Cliente incumplió la recolección en tienda"
+}
+
+### ÓRDENES (STAFF) — Registrar devolución de la orden (efectuado por el staff)
+# items: min 1; cada item = { linePublicId (uuid), quantity }. reason opcional.
+# El stock devuelto impacta el inventario como movimiento CUSTOMER_RETURN en kardex.
+POST {{API-V1}}/orders/admin/{{ORDER-ID}}/returns
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+{
+  "items": [
+    { "linePublicId": "{{LINE-ID}}", "quantity": 1 }
+  ],
+  "reason": "Producto dañado al llegar al cliente"
+}
+
+# -------------------------------------------------------------
+# ÓRDENES DEL CLIENTE (CLIENTE)
+# -------------------------------------------------------------
+
+### ÓRDENES — Listar mis órdenes
+# Filtro: orderStatus (PENDING_PAYMENT_VERIFICATION|CONFIRMED|PREPARING|SHIPPED|DELIVERED|CANCELLED).
+GET {{API-V1}}/orders?orderStatus=SHIPPED&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+### ÓRDENES — Obtener mi orden por publicId
+GET {{API-V1}}/orders/{{ORDER-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+### ÓRDENES — Cancelar mi orden
+# Cancelable por el cliente mientras esté PENDING_PAYMENT_VERIFICATION/CONFIRMED.
+# reason: opcional (máx 300). Responde 204.
+POST {{API-V1}}/orders/{{ORDER-ID}}/cancel
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+{
+  "reason": "Ya no necesito el producto"
+}
+
+### ÓRDENES — Cancelar mi orden sin razón (body mínimo)
+POST {{API-V1}}/orders/{{ORDER-ID}}/cancel
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+{}

@@ -1,0 +1,76 @@
+# =============================================================
+# 01-inventory.http — Rutas de inventario (exclusivo del personal)
+# Fuente: presentation/api/v1/inventory/router.ts
+# Roles: OPERADOR y ADMINISTRADOR (staff)
+# Nota: las escritas de stock exigen el header Idempotency-Key
+#       (string de 1 a 100 caracteres) para ser idempotentes.
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@ACCESS-TOKEN = <access-token-de-operador-o-administrador>
+@ORIGIN = http://localhost:5173
+
+# --- Referencias capturadas de respuestas anteriores ---
+@VARIANT-ID = <variantPublicId-de-la-respuesta-anterior>
+
+# -------------------------------------------------------------
+# CONSULTAS
+# -------------------------------------------------------------
+
+### INVENTARIO — Listar balances de stock
+# Filtros: q (busca SKU o nombre), onlyAvailable ("true"/"false"),
+# isActive ("true"/"false"), page=1, pageSize=20 por defecto.
+GET {{API-V1}}/inventory?q=camera&onlyAvailable=true&isActive=true&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### INVENTARIO — Consultar stock de una variante
+GET {{API-V1}}/inventory/variants/{{VARIANT-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### INVENTARIO — Listar kardex (movimientos) de una variante
+# Filtros: movementType (PURCHASE_RECEIPT|SALE|MANUAL_ADJUSTMENT|CUSTOMER_RETURN|SALE_CANCELLATION),
+# from/to: instantes ISO completos (inclusivos en ambos extremos), page, pageSize.
+GET {{API-V1}}/inventory/variants/{{VARIANT-ID}}/kardex?movementType=PURCHASE_RECEIPT&from=2026-01-01T00:00:00.000Z&to=2026-12-31T23:59:59.999Z&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### INVENTARIO — Listar kardex sin filtros
+GET {{API-V1}}/inventory/variants/{{VARIANT-ID}}/kardex?page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+# -------------------------------------------------------------
+# ESCRITAS DE STOCK (header Idempotency-Key obligatorio)
+# -------------------------------------------------------------
+
+### INVENTARIO — Registrar recepción de mercadería (entrada por compra)
+# quantity: entero positivo. reason: 1-200 (obligatorio, documentación del movimiento).
+# sourceReference: documento opcional (factura, remisión...) 1-100 o null.
+POST {{API-V1}}/inventory/variants/{{VARIANT-ID}}/purchase-receipts
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+Idempotency-Key: receipt-2026-11-02-001
+
+{
+  "quantity": 25,
+  "reason": "Compra a proveedor Canon Guatemala",
+  "sourceReference": "FAC-2026-000123"
+}
+
+### INVENTARIO — Ajuste manual de stock (variación con signo)
+# quantityDelta: entero distinto de cero (positivo = entrada, negativo = salida).
+# reason: 1-200 obligatorio. sourceReference opcional.
+POST {{API-V1}}/inventory/variants/{{VARIANT-ID}}/adjustments
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+Idempotency-Key: adjust-2026-11-02-001
+
+{
+  "quantityDelta": -2,
+  "reason": "Conteo físico: unidades dañadas por transporte",
+  "sourceReference": "HOJA-CONTEO-45"
+}

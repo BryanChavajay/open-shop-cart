@@ -1,0 +1,84 @@
+# =============================================================
+# 03-addresses.http — Rutas de direcciones
+# Fuente: presentation/api/v1/addresses/router.ts
+# Roles:
+#   - Cualquier usuario autenticado: catálogos de departamentos y municipios
+#   - CLIENTE: gestión de sus propias direcciones (los operadores no tienen)
+# Nota: la titularidad de la dirección viene de la sesión, nunca del input.
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@ACCESS-TOKEN = <access-token-de-cliente>
+@ORIGIN = http://localhost:5173
+
+# --- Referencias capturadas de respuestas anteriores ---
+@DEPARTMENT-ID = <departmentPublicId-de-la-respuesta-anterior>
+@MUNICIPALITY-ID = <municipalityPublicId-de-la-respuesta-anterior>
+@ADDRESS-ID = <addressPublicId-de-la-respuesta-anterior>
+
+# -------------------------------------------------------------
+# CATÁLOGO GEOGRÁFICO (cualquier usuario autenticado)
+# -------------------------------------------------------------
+
+### DIRECCIONES — Listar departamentos
+GET {{API-V1}}/addresses/departments
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### DIRECCIONES — Listar municipios de un departamento
+GET {{API-V1}}/addresses/departments/{{DEPARTMENT-ID}}/municipalities
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+# -------------------------------------------------------------
+# GESTIÓN DE DIRECCIONES PROPIAS (solo CLIENTE)
+# -------------------------------------------------------------
+
+### DIRECCIONES — Crear dirección
+# phone: 8-20 caracteres (la entidad normaliza prefijos +502).
+# exactAddress: dirección exacta (zona, colonia, calle, número...). 1-300.
+# reference: pista de entrega (color de puerta, punto de referencia...). 1-300.
+POST {{API-V1}}/addresses
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "recipientFirstName": "Ana",
+  "recipientLastName": "Pérez",
+  "phone": "+502 5555 1234",
+  "municipalityPublicId": "{{MUNICIPALITY-ID}}",
+  "exactAddress": "Zona 10, colonia El Prado, 5a calle 2-15, casa 7",
+  "reference": "Casa amarilla con portón negro, frente al parque"
+}
+
+### DIRECCIONES — Listar mis direcciones
+# page=1, pageSize=20 por defecto.
+GET {{API-V1}}/addresses?page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### DIRECCIONES — Obtener mi dirección por publicId
+GET {{API-V1}}/addresses/{{ADDRESS-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### DIRECCIONES — Reemplazar mi dirección (PUT, campos completos)
+PUT {{API-V1}}/addresses/{{ADDRESS-ID}}
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "recipientFirstName": "Ana Lucía",
+  "recipientLastName": "Pérez",
+  "phone": "55551234",
+  "municipalityPublicId": "{{MUNICIPALITY-ID}}",
+  "exactAddress": "Zona 10, colonia El Prado, 5a calle 2-15",
+  "reference": "Torre A, nivel 3, oficina 305"
+}
+
+### DIRECCIONES — Eliminar mi dirección
+DELETE {{API-V1}}/addresses/{{ADDRESS-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}

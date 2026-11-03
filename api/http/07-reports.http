@@ -1,0 +1,45 @@
+# =============================================================
+# 07-reports.http — Rutas de reportes y analítica (RF-08)
+# Fuente: presentation/api/v1/reports/router.ts
+# Roles: solo ADMINISTRADOR
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@ACCESS-TOKEN = <access-token-de-administrador>
+@ORIGIN = http://localhost:5173
+
+# -------------------------------------------------------------
+# REPORTES (ADMINISTRADOR)
+# -------------------------------------------------------------
+
+### REPORTES — Carritos abandonados
+# page=1 y pageSize=100 (máximo 100) por defecto.
+GET {{API-V1}}/reports/abandoned-carts?page=1&pageSize=100
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### REPORTES — Ventas por periodo
+# granularity: DAY | WEEK | MONTH (obligatorio).
+# from/to: instantes ISO opcionales; from debe ser anterior a to.
+GET {{API-V1}}/reports/sales-by-period?granularity=MONTH&from=2026-01-01T00:00:00.000Z&to=2026-12-31T23:59:59.999Z
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### REPORTES — Ventas por categoría
+# from/to: instantes ISO opcionales. Devuelve el monto vendido por categoría.
+GET {{API-V1}}/reports/sales-by-category?from=2026-01-01T00:00:00.000Z&to=2026-12-31T23:59:59.999Z
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### REPORTES — Productos más vendidos (top)
+# limit: 1-100, por defecto 10. from/to opcionales (ventana ISO).
+GET {{API-V1}}/reports/top-products?limit=10&from=2026-01-01T00:00:00.000Z&to=2026-12-31T23:59:59.999Z
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### REPORTES — Listado de órdenes para drill-down del panel
+# Reutiliza el mismo query del módulo de órdenes /admin:
+# orderStatus, paymentStatus, customerPublicId, search, from/to, page, pageSize.
+GET {{API-V1}}/reports/orders?orderStatus=DELIVERED&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}

@@ -1,0 +1,364 @@
+# =============================================================
+# 00-catalog.http — Rutas del catálogo (públicas y de administración)
+# Fuente: presentation/api/v1/catalog/router.ts
+# Roles:
+#   - Público (sin autenticación): catálogo de ventas
+#   - ADMINISTRADOR: taxonomía, productos, variants e imágenes
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@ACCESS-TOKEN = <access-token-de-administrador>
+@ORIGIN = http://localhost:5173
+
+# --- Referencias capturadas de respuestas anteriores ---
+@CATEGORY-ID = <categoryPublicId-de-la-respuesta-anterior>
+@BRAND-ID = <brandPublicId-de-la-respuesta-anterior>
+@PRODUCT-ID = <productPublicId-de-la-respuesta-anterior>
+@VARIANT-ID = <variantPublicId-de-la-respuesta-anterior>
+@IMAGE-ID = <imagePublicId-de-la-respuesta-anterior>
+
+# -------------------------------------------------------------
+# CATÁLOGO PÚBLICO (sin token)
+# -------------------------------------------------------------
+
+### CATÁLOGO — Listar productos del catálogo público
+# Filtros: q (texto), categoryId, brandId, minPrice/maxPrice (unidades, 2 decimales),
+# onlyAvailable ("true"/"false"), sort (name|price|newest). Por defecto page=1, pageSize=20.
+GET {{API-V1}}/catalog/products?q=camera&onlyAvailable=true&sort=newest&page=1&pageSize=20
+Origin: {{ORIGIN}}
+
+### CATÁLOGO — Listar catálogo filtrando por categoría y marca
+GET {{API-V1}}/catalog/products?categoryId={{CATEGORY-ID}}&brandId={{BRAND-ID}}&minPrice=10&maxPrice=5000&page=1&pageSize=20
+Origin: {{ORIGIN}}
+
+### CATÁLOGO — Obtener detalle público de un producto
+GET {{API-V1}}/catalog/products/{{PRODUCT-ID}}
+Origin: {{ORIGIN}}
+
+### CATÁLOGO — Servir imagen pública de un producto
+# Devuelve el binario de la imagen (Content-Type image/*).
+GET {{API-V1}}/catalog/images/{{IMAGE-ID}}
+Origin: {{ORIGIN}}
+
+# -------------------------------------------------------------
+# TAXONOMÍA: CATEGORÍAS (ADMINISTRADOR)
+# -------------------------------------------------------------
+
+### CATEGORÍAS — Crear categoría
+# name (1-100), isActive por defecto true.
+POST {{API-V1}}/categories
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "name": "Cámaras",
+  "isActive": true
+}
+
+### CATEGORÍAS — Listar categorías
+# includeDeleted ("true"/"false"), page=1, pageSize=20 por defecto. Solo administrador.
+GET {{API-V1}}/categories?page=1&pageSize=20&includeDeleted=false
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### CATEGORÍAS — Obtener categoría por publicId
+GET {{API-V1}}/categories/{{CATEGORY-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### CATEGORÍAS — Actualizar categoría
+# Debe proporcionar al menos un campo (name o isActive).
+PATCH {{API-V1}}/categories/{{CATEGORY-ID}}
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "name": "Cámaras Fotográficas"
+}
+
+### CATEGORÍAS — Eliminar categoría (borrado lógico)
+DELETE {{API-V1}}/categories/{{CATEGORY-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+# -------------------------------------------------------------
+# TAXONOMÍA: MARCAS (ADMINISTRADOR)
+# -------------------------------------------------------------
+
+### MARCAS — Crear marca
+POST {{API-V1}}/brands
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "name": "Canon",
+  "isActive": true
+}
+
+### MARCAS — Listar marcas
+GET {{API-V1}}/brands?page=1&pageSize=20&includeDeleted=false
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### MARCAS — Obtener marca por publicId
+GET {{API-V1}}/brands/{{BRAND-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### MARCAS — Actualizar marca
+PATCH {{API-V1}}/brands/{{BRAND-ID}}
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "isActive": false
+}
+
+### MARCAS — Eliminar marca (borrado lógico)
+DELETE {{API-V1}}/brands/{{BRAND-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+# -------------------------------------------------------------
+# PRODUCTOS (ADMINISTRADOR)
+# -------------------------------------------------------------
+
+### PRODUCTOS — Crear producto con opciones y variants
+# options: cada opción tiene values[]; las variants referencian valores por
+# posición 1-based (optionIndex/valueIndex) porque aún no existen publicIds.
+# variants: min 1, max 30. Precios con máximo 2 decimales. unitCost opcional.
+POST {{API-V1}}/products
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "categoryId": "{{CATEGORY-ID}}",
+  "brandId": "{{BRAND-ID}}",
+  "name": "Canon EOS R50",
+  "description": "Cámara mirrorless RF, sensor 24.2 MP, video 4K",
+  "options": [
+    {
+      "name": "Color",
+      "values": [
+        { "value": "Negro", "sortOrder": 1 },
+        { "value": "Blanco", "sortOrder": 2 }
+      ]
+    },
+    {
+      "name": "Kit lente",
+      "values": [
+        { "value": "Body only", "sortOrder": 1 },
+        { "value": "18-45mm", "sortOrder": 2 }
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "name": "EOS R50 Negro Body only",
+      "unitCost": 500.00,
+      "unitPrice": 799.99,
+      "sortOrder": 1,
+      "optionValues": [
+        { "optionIndex": 1, "valueIndex": 1 },
+        { "optionIndex": 2, "valueIndex": 1 }
+      ]
+    },
+    {
+      "name": "EOS R50 Blanco 18-45mm",
+      "unitCost": 580.00,
+      "unitPrice": 899.99,
+      "sortOrder": 2,
+      "optionValues": [
+        { "optionIndex": 1, "valueIndex": 2 },
+        { "optionIndex": 2, "valueIndex": 2 }
+      ]
+    }
+  ]
+}
+
+### PRODUCTOS — Listar productos (vista administrador)
+# Filtros: includeDeleted, categoryId, brandId, page, pageSize.
+GET {{API-V1}}/products?page=1&pageSize=20&includeDeleted=false&categoryId={{CATEGORY-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### PRODUCTOS — Obtener producto por publicId (vista administrador)
+GET {{API-V1}}/products/{{PRODUCT-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### PRODUCTOS — Actualizar datos generales del producto
+# Al menos un campo: name, description, categoryId o brandId.
+PATCH {{API-V1}}/products/{{PRODUCT-ID}}
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "name": "Canon EOS R50 (2025)",
+  "description": "Cámara mirrorless RF con sensor de 24.2 MP"
+}
+
+### PRODUCTOS — Activar o desactivar producto
+PATCH {{API-V1}}/products/{{PRODUCT-ID}}/active
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "isActive": true
+}
+
+### PRODUCTOS — Reemplazar el set completo de opciones
+# Reemplazo total: un array vacío elimina todas las opciones del producto.
+PATCH {{API-V1}}/products/{{PRODUCT-ID}}/options
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "options": [
+    {
+      "name": "Color",
+      "values": [
+        { "value": "Negro", "sortOrder": 1 },
+        { "value": "Plata", "sortOrder": 2 }
+      ]
+    }
+  ]
+}
+
+### PRODUCTOS — Asignar/portada del producto (cover)
+# imagePublicId puede ser null para quitar la portada.
+PUT {{API-V1}}/products/{{PRODUCT-ID}}/cover
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "imagePublicId": "{{IMAGE-ID}}"
+}
+
+### PRODUCTOS — Eliminar producto (borrado lógico)
+DELETE {{API-V1}}/products/{{PRODUCT-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+# -------------------------------------------------------------
+# VARIANTS DE PRODUCTO (ADMINISTRADOR)
+# -------------------------------------------------------------
+
+### VARIANTS — Agregar variant a un producto existente
+# optionValues con ids reales de opciones/valores ya creados en el producto.
+POST {{API-V1}}/products/{{PRODUCT-ID}}/variants
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "name": "EOS R50 Plata 18-45mm",
+  "unitCost": 570.00,
+  "unitPrice": 879.99,
+  "sortOrder": 3,
+  "isActive": true,
+  "imagePublicId": null,
+  "optionValues": [
+    { "optionPublicId": "<optionPublicId-del-producto>", "valuePublicId": "<valuePublicId-de-la-opcion>" }
+  ]
+}
+
+### VARIANTS — Actualizar variant
+# Al menos un campo: name, unitCost, unitPrice, sortOrder, isActive u optionValues.
+PATCH {{API-V1}}/products/{{PRODUCT-ID}}/variants/{{VARIANT-ID}}
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "unitPrice": 919.99,
+  "isActive": true
+}
+
+### VARIANTS — Asignar portada (cover) de la variant
+PUT {{API-V1}}/products/{{PRODUCT-ID}}/variants/{{VARIANT-ID}}/cover
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "imagePublicId": "{{IMAGE-ID}}"
+}
+
+### VARIANTS — Configurar carrusel de imágenes de la variant
+# imagePublicIds: sin repetidos; el orden define el carrusel.
+PUT {{API-V1}}/products/{{PRODUCT-ID}}/variants/{{VARIANT-ID}}/carousel
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "imagePublicIds": [
+    "{{IMAGE-ID}}",
+    "<imagePublicId-2>"
+  ]
+}
+
+### VARIANTS — Eliminar variant
+DELETE {{API-V1}}/products/{{PRODUCT-ID}}/variants/{{VARIANT-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+# -------------------------------------------------------------
+# IMÁGENES DE PRODUCTO (ADMINISTRADOR)
+# -------------------------------------------------------------
+
+### IMÁGENES — Subir imágenes (multipart/form-data)
+# Campo "images": 1..10 archivos, hasta 5 MB cada uno.
+# Campo "altTexts": cadena JSON (string|null)[] alineada al orden de los archivos.
+# Ejemplo REST Client: seleccione los archivos en el editor del request.
+POST {{API-V1}}/images
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+Content-Type: multipart/form-data; boundary=----Boundary
+
+------Boundary
+Content-Disposition: form-data; name="images"; filename="r50-front.jpg"
+Content-Type: image/jpeg
+
+< ./assets/r50-front.jpg
+------Boundary
+Content-Disposition: form-data; name="images"; filename="r50-back.jpg"
+Content-Type: image/jpeg
+
+< ./assets/r50-back.jpg
+------Boundary
+Content-Disposition: form-data; name="altTexts"
+
+["Cámara Canon EOS R50 de frente","Cámara Canon EOS R50 por detrás"]
+------Boundary--
+
+### IMÁGENES — Actualizar texto alternativo de una imagen
+# altText acepta null para limpiarlo.
+PATCH {{API-V1}}/images/{{IMAGE-ID}}
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "altText": "Vista frontal del producto"
+}
+
+### IMÁGENES — Eliminar imagen
+DELETE {{API-V1}}/images/{{IMAGE-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### IMÁGENES — Servir imagen (vista administrador)
+GET {{API-V1}}/images/{{IMAGE-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}

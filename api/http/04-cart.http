@@ -1,0 +1,26 @@
+# =============================================================
+# 04-cart.http — Rutas del carrito de sesión (token por cookie)
+# Fuente: presentation/api/v1/cart/router.ts
+# Roles: cualquier visitante (no exige autenticación); el carrito vive
+#        en la cookie httpOnly `cartToken` que la API emite y renueva
+#        (15 días, se refresca en cada beat de actividad).
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@ORIGIN = http://localhost:5173
+@CART-COOKIE = cartToken=<valor-de-la-cookie-cartToken>
+
+# -------------------------------------------------------------
+# ACTIVIDAD
+# -------------------------------------------------------------
+
+### CARRITO — Registrar beat de actividad
+# No lleva datos: se acepta sin body o con {} vacío. Si es la primera beat,
+# responde 201 con la cookie cartToken nuevas; si ya existe, responde 204
+# y renueva la cookie. Travels de refresco con Cache-Control: no-store.
+POST {{API-V1}}/cart/activity
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Cookie: {{CART-COOKIE}}
+
+{}
