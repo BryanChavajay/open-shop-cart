@@ -1,6 +1,6 @@
 # OpenShopCart
 
-Administrador de E-commerce esrito en [bdonald](https://github.com/BryanChavajay/). Desarrollado con TypeScript, integra tienda en linea + control administrativo.
+Administrador de E-commerce hecho con <3 por [bdonald](https://github.com/BryanChavajay/). Desarrollado con TypeScript, integra tienda en linea + control administrativo.
 
 ## División del proyecto
 
