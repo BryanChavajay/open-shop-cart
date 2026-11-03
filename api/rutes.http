@@ -3,15 +3,36 @@
 @PUBLIC-ID = <public-id-del-usuario>
 @ORIGIN = http://localhost:5173
 
+# =============================================================
+# ÍNDICE DE DOCUMENTACIÓN
+# Este archivo contiene AUTH y USERS del router v1.
+# El resto de rutas está documentado por módulo en la carpeta api/http:
+#   00-catalog.http    — catálogo público + admin (taxonomía, productos...)
+#   01-inventory.http  — inventario, kardex y escritas de stock
+#   02-coupons.http    — cupones (admin + evaluate)
+#   03-addresses.http  — direcciones y catálogo geográfico
+#   04-cart.http       — carrito de sesión (cookie cartToken)
+#   05-checkout.http   — reserva, confirmación y verificación de pago
+#   06-orders.http     — órdenes de cliente y ciclo logístico /admin
+#   07-reports.http    — reportes (RF-08)
+#   08-audit.http      — bitácora de auditoría
+# Workflows completos:
+#   90-workflow-registrar-productos.http — alta completa de producto
+#   91-workflow-compra-completa.http     — compra extremo a extremo
+# =============================================================
+
+### HELLO — Ruta de bienvenida del router v1
+GET {{API-V1}}/hello
+
 ### AUTH — Registrar cliente
 POST {{API-V1}}/auth/register
 Content-Type: application/json
 Origin: {{ORIGIN}}
 
 {
-  "firstName": "DONALD",
-  "lastName": "Cho",
-  "email": "thomaschavajay20@gmail.com",
+  "firstName": "carlos",
+  "lastName": "zap",
+  "email": "carlos.zap@local.com",
   "password": "Cambiar123!"
 }
 

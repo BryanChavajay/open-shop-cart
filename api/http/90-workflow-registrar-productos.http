@@ -1,0 +1,289 @@
+# =============================================================
+# 90-workflow-registrar-productos.http — WORKFLOW: alta completa de un producto
+# Actor: ADMINISTRADOR
+# =============================================================
+# Pasos del flujo (en orden). Tras cada request, copie el publicId de la
+# respuesta al placeholder indicado.
+#
+#   1. Login como administrador            -> ACCESS-TOKEN (+cookie refreshToken)
+#   2. Crear CATEGORÍA                     -> CATEGORY-ID
+#   3. Crear MARCA                         -> BRAND-ID
+#   4. Verificar listados de taxonomía
+#   5. Crear PRODUCTO (con options + variants) -> PRODUCT-ID + variantPublicId[]
+#   6. Subir imágenes (multipart)          -> imagePublicId[]
+#   7. Asignar portada del producto        -> IMAGE-ID
+#   8. Configurar carrusel de una variant
+#   9. Registrar entrada de stock por variante (purchase-receipt)
+#  10. Activar PRODUCTO (publicación en tienda)
+#  11. Verificar: admin GET producto, público GET catálogo, kardex
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@ORIGIN = http://localhost:5173
+
+@ADMIN-EMAIL = <correo-de-administrador>
+@ADMIN-PASS = <contrasena-de-administrador>
+
+# --- REFERENCIAS (complete tras cada paso) ---
+@ACCESS-TOKEN = <access-token-del-paso-1>
+@CATEGORY-ID = <categoryPublicId-del-paso-2>
+@BRAND-ID = <brandPublicId-del-paso-3>
+@PRODUCT-ID = <productPublicId-del-paso-5>
+@VARIANT-1-ID = <variantPublicId-1-del-paso-5>
+@VARIANT-2-ID = <variantPublicId-2-del-paso-5>
+@IMAGE-1-ID = <imagePublicId-1-del-paso-6>
+@IMAGE-2-ID = <imagePublicId-2-del-paso-6>
+
+# -------------------------------------------------------------
+# PASO 1 — Autenticación del administrador
+# La respuesta entrega el access token en el body y la cookie
+# refreshToken (usada solo por /auth/refresh); todos los requests
+# siguientes viajan con Bearer.
+# -------------------------------------------------------------
+### PASO 1 — Login administrador
+POST {{API-V1}}/auth/login
+Content-Type: application/json
+Origin: {{ORIGIN}}
+
+{
+  "email": "{{ADMIN-EMAIL}}",
+  "password": "{{ADMIN-PASS}}"
+}
+
+# → pegue el accessToken en @ACCESS-TOKEN (variable de arriba)
+
+# -------------------------------------------------------------
+# PASO 2 — Crear la categoría (si ya existe, use su listado)
+# Respuesta: categoryPublicId -> pegar en @CATEGORY-ID
+# -------------------------------------------------------------
+### PASO 2a — Crear categoría "Notebooks"
+POST {{API-V1}}/categories
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "name": "Notebooks",
+  "isActive": true
+}
+
+# → pegue el categoryPublicId en @CATEGORY-ID (variable de arriba)
+
+# -------------------------------------------------------------
+# PASO 3 — Crear la marca
+# Respuesta: brandPublicId -> pegar en @BRAND-ID
+# -------------------------------------------------------------
+### PASO 3a — Crear marca "TechNova"
+POST {{API-V1}}/brands
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "name": "TechNova",
+  "isActive": true
+}
+
+# → pegue el brandPublicId en @BRAND-ID (variable de arriba)
+
+# -------------------------------------------------------------
+# PASO 4 — Verificación opcional de la taxonomía creada
+# -------------------------------------------------------------
+### PASO 4a — Listar categorías
+GET {{API-V1}}/categories?page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### PASO 4b — Listar marcas
+GET {{API-V1}}/brands?page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+# -------------------------------------------------------------
+# PASO 5 — Crear el producto con opciones y variants
+# Reglas:
+#   - las variants (1-30) referencian valores por POSICIÓN 1-based:
+#     optionIndex apunta a la posición en options[] y valueIndex a la
+#     posición dentro de values[] de esa opción.
+#   - precios con máximo 2 decimales; unitCost opcional.
+# Respuesta: productPublicId -> @PRODUCT-ID y por cada variant su
+#   variantPublicId -> @VARIANT-1-ID / @VARIANT-2-ID
+# -------------------------------------------------------------
+### PASO 5a — Crear producto "TechNova AirBook 14"
+POST {{API-V1}}/products
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "categoryId": "{{CATEGORY-ID}}",
+  "brandId": "{{BRAND-ID}}",
+  "name": "TechNova AirBook 14",
+  "description": "Notebook ultraligera 14\" con Ryzen 7, 16 GB RAM y SSD 512 GB",
+  "options": [
+    {
+      "name": "Color",
+      "values": [ { "value": "Gris", "sortOrder": 1 }, { "value": "Plata", "sortOrder": 2 } ]
+    },
+    {
+      "name": "Memoria",
+      "values": [ { "value": "16GB", "sortOrder": 1 }, { "value": "32GB", "sortOrder": 2 } ]
+    }
+  ],
+  "variants": [
+    {
+      "name": "AirBook 14 Gris 16GB",
+      "unitCost": 750.00,
+      "unitPrice": 1099.00,
+      "sortOrder": 1,
+      "optionValues": [ { "optionIndex": 1, "valueIndex": 1 }, { "optionIndex": 2, "valueIndex": 1 } ]
+    },
+    {
+      "name": "AirBook 14 Plata 32GB",
+      "unitCost": 890.00,
+      "unitPrice": 1299.00,
+      "sortOrder": 2,
+      "optionValues": [ { "optionIndex": 1, "valueIndex": 2 }, { "optionIndex": 2, "valueIndex": 2 } ]
+    }
+  ]
+}
+
+# → pegue el productPublicId en @PRODUCT-ID (variable de arriba)
+# → pegue cada variantPublicId en @VARIANT-1-ID / @VARIANT-2-ID (variables de arriba)
+
+# -------------------------------------------------------------
+# PASO 6 — Subir imágenes del producto (multipart/form-data)
+# 1-10 archivos de hasta 5 MB; altTexts es un STRING JSON cuya
+# posición debe coincidir con el orden de "images".
+# Respuesta: imagePublicId por archivo -> @IMAGE-1-ID / @IMAGE-2-ID
+# -------------------------------------------------------------
+### PASO 6a — Subir imágenes del producto
+POST {{API-V1}}/images
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+Content-Type: multipart/form-data; boundary=----Boundary
+
+------Boundary
+Content-Disposition: form-data; name="images"; filename="airbook-front.jpg"
+Content-Type: image/jpeg
+
+< ./assets/airbook-front.jpg
+------Boundary
+Content-Disposition: form-data; name="images"; filename="airbook-side.jpg"
+Content-Type: image/jpeg
+
+< ./assets/airbook-side.jpg
+------Boundary
+Content-Disposition: form-data; name="altTexts"
+
+["TechNova AirBook 14 vista frontal","TechNova AirBook 14 vista lateral"]
+------Boundary--
+
+# → pegue cada imagePublicId en @IMAGE-1-ID / @IMAGE-2-ID (variables de arriba)
+
+# -------------------------------------------------------------
+# PASO 7 — Asignar la portada (cover) del producto y de la variant
+# -------------------------------------------------------------
+### PASO 7a — Portada del producto
+PUT {{API-V1}}/products/{{PRODUCT-ID}}/cover
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "imagePublicId": "{{IMAGE-1-ID}}"
+}
+
+### PASO 7b — Portada de la variante 1
+PUT {{API-V1}}/products/{{PRODUCT-ID}}/variants/{{VARIANT-1-ID}}/cover
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "imagePublicId": "{{IMAGE-1-ID}}"
+}
+
+# -------------------------------------------------------------
+# PASO 8 — Carrusel de imágenes de la variante 1
+# El orden de imagePublicIds define la secuencia; sin repetidos.
+# -------------------------------------------------------------
+### PASO 8a — Configurar carrusel
+PUT {{API-V1}}/products/{{PRODUCT-ID}}/variants/{{VARIANT-1-ID}}/carousel
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "imagePublicIds": [ "{{IMAGE-1-ID}}", "{{IMAGE-2-ID}}" ]
+}
+
+# -------------------------------------------------------------
+# PASO 9 — Stock inicial por variante (recepción de compra)
+# Header Idempotency-Key OBLIGATORIO (cámbielo en cada re-envío real).
+# Repita este paso por cada variantPublicId (VARIANT-2-ID en 9b).
+# -------------------------------------------------------------
+### PASO 9a — Entrada de stock de la variante 1
+POST {{API-V1}}/inventory/variants/{{VARIANT-1-ID}}/purchase-receipts
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+Idempotency-Key: wf-producto-receipt-v1-001
+
+{
+  "quantity": 15,
+  "reason": "Stock inicial del alta de producto (workflow)",
+  "sourceReference": "FAC-2026-WF-001"
+}
+
+### PASO 9b — Entrada de stock de la variante 2
+POST {{API-V1}}/inventory/variants/{{VARIANT-2-ID}}/purchase-receipts
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+Idempotency-Key: wf-producto-receipt-v2-001
+
+{
+  "quantity": 10,
+  "reason": "Stock inicial del alta de producto (workflow)",
+  "sourceReference": "FAC-2026-WF-001"
+}
+
+# -------------------------------------------------------------
+# PASO 10 — Activar el producto (publicación en tienda)
+# PATCH /products/:publicId/active con {"isActive": true} publica
+# el producto; {"isActive": false} lo desactiva. El producto se
+# registra inactivo en el PASO 5, por lo que este paso es
+# obligatorio para que aparezca en el catálogo público.
+# -------------------------------------------------------------
+### PASO 10 — Activar el producto
+PATCH {{API-V1}}/products/{{PRODUCT-ID}}/active
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+{
+  "isActive": true
+}
+
+# -------------------------------------------------------------
+# PASO 11 — Verificación final del alta
+# -------------------------------------------------------------
+### PASO 11a — Ver el producto completo en la vista admin
+GET {{API-V1}}/products/{{PRODUCT-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### PASO 11b — Ver el producto en el catálogo público (sin token)
+GET {{API-V1}}/catalog/products/{{PRODUCT-ID}}
+Origin: {{ORIGIN}}
+
+### PASO 11c — Ver stock de la variante 1
+GET {{API-V1}}/inventory/variants/{{VARIANT-1-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}
+
+### PASO 11d — Ver el kardex de la variante 1 (movimiento PURCHASE_RECEIPT)
+GET {{API-V1}}/inventory/variants/{{VARIANT-1-ID}}/kardex?movementType=PURCHASE_RECEIPT&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{ACCESS-TOKEN}}

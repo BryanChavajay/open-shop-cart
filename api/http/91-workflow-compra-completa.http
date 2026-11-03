@@ -1,0 +1,303 @@
+# =============================================================
+# 91-workflow-compra-completa.http — WORKFLOW: compra extremo a extremo
+# Actores: CLIENTE (compra) y OPERADOR/ADMINISTRADOR (verificación + logística)
+# =============================================================
+# Pasos del flujo (en orden):
+#
+#   1.  Login del CLIENTE                                  -> CUSTOMER-TOKEN (+cookie refreshToken)
+#   2.  Explorar catálogo público                          -> PRODUCT-ID
+#   3.  Detalle público del producto                       -> variantPublicId[] + precios
+#   4.  Catálogo geográfico: departamentos                 -> DEPARTMENT-ID
+#   5.  Municipios del departamento                        -> MUNICIPALITY-ID
+#   6.  Crear dirección del cliente                        -> ADDRESS-ID
+#   7.  (Opcional) Registrar beat del carrito              -> cookie cartToken
+#   8.  (Opcional) Evaluar cupón sobre las líneas
+#   9.  Reservar stock: POST /checkout/reserve             -> RESERVATION-ID + cotización
+#  10.  Confirmar compra: POST /checkout/confirm           -> ORDER-ID (Idempotency-Key)
+#  11.  Login del STAFF                                    -> STAFF-TOKEN
+#  12.  Verificar pago: APPROVE (transferencia)            -> orden CONFIRMED
+#  13.  Transición PREPARING -> SHIPPED -> DELIVERED
+#  14.  Verificaciones: cliente ve su orden; staff la consulta
+# Apéndice A: cancelar la orden como cliente (antes del ciclo logístico)
+# Apéndice B: rechazo del pago por el staff y restauración de stock
+# =============================================================
+
+@API-V1 = http://localhost:5000/api/v1
+@ORIGIN = http://localhost:5173
+
+# --- REFERENCIAS (complete tras cada paso) ---
+# Paso 1
+@CUSTOMER-TOKEN = <access-token-del-cliente-paso-1>
+# Paso 2/3
+@VARIANT-A = <variantPublicId-A-del-paso-3>
+@VARIANT-B = <variantPublicId-B-del-paso-3>
+# Paso 4/5
+@DEPARTMENT-ID = <departmentPublicId-del-paso-4>
+@MUNICIPALITY-ID = <municipalityPublicId-del-paso-5>
+# Paso 6
+@ADDRESS-ID = <addressPublicId-del-paso-6>
+# Paso 7
+@CART-TOKEN = <cartToken-enviado-en-la-cookie-del-paso-7>
+# Paso 9
+@RESERVATION-ID = <reservationPublicId-del-paso-9>
+# Paso 10
+@ORDER-ID = <orderPublicId-del-paso-10>
+# Paso 11
+@STAFF-TOKEN = <access-token-del-staff-paso-11>
+
+### PASO 1 — Login del cliente
+POST {{API-V1}}/auth/login
+Content-Type: application/json
+Origin: {{ORIGIN}}
+
+{
+  "email": "thomaschavajay20@gmail.com",
+  "password": "algo1234"
+}
+
+# → pegue el accessToken en @CUSTOMER-TOKEN (variable de arriba)
+
+# -------------------------------------------------------------
+# PASO 2 — Explorar el catálogo público (sin token)
+# Filtros disponibles: q, categoryId, brandId, minPrice/maxPrice,
+# onlyAvailable=true (solo stock), sort=name|price|newest.
+# -------------------------------------------------------------
+### PASO 2a — Buscar productos disponibles
+GET {{API-V1}}/catalog/products?q=notebook&onlyAvailable=true&sort=price&page=1&pageSize=20
+Origin: {{ORIGIN}}
+
+# → elija el producto y reemplace su publicId en la URL del PASO 3a
+
+# -------------------------------------------------------------
+# PASO 3 — Detalle del producto elegido (con token de cliente)
+# De la respuesta tome los variantPublicId y sus precios.
+# -------------------------------------------------------------
+### PASO 3a — Ver detalle del producto
+GET {{API-V1}}/catalog/products/01a19e92-7b3c-701f-9b44-c3047e642f84
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+# → pegue cada variantPublicId en @VARIANT-A / @VARIANT-B (variables de arriba)
+
+# -------------------------------------------------------------
+# PASO 4/5 — Catálogo geográfico (con token de cliente)
+# -------------------------------------------------------------
+### PASO 4a — Listar departamentos
+GET {{API-V1}}/addresses/departments
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+# → pegue el departmentPublicId elegido en @DEPARTMENT-ID (variable de arriba)
+
+### PASO 5a — Listar municipios del departamento
+GET {{API-V1}}/addresses/departments/{{DEPARTMENT-ID}}/municipalities
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+# → pegue el municipalityPublicId elegido en @MUNICIPALITY-ID (variable de arriba)
+
+# -------------------------------------------------------------
+# PASO 6 — Crear la dirección de entrega
+# -------------------------------------------------------------
+### PASO 6a — Crear dirección
+POST {{API-V1}}/addresses
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+{
+  "recipientFirstName": "Ana",
+  "recipientLastName": "Pérez",
+  "phone": "55551234",
+  "municipalityPublicId": "{{MUNICIPALITY-ID}}",
+  "exactAddress": "Zona 12, colonia Monte María, 3a avenida 6-20, nivel 2",
+  "reference": "Local blanco entre farmacia y comedor"
+}
+
+# → pegue el addressPublicId en @ADDRESS-ID (variable de arriba)
+
+# -------------------------------------------------------------
+# PASO 7 (opcional) — Beat de actividad del carrito de la web
+# Responde 201 la primera vez (emite cookie cartToken) y 204 después.
+# -------------------------------------------------------------
+### PASO 7a — Actividad de carrito
+POST {{API-V1}}/cart/activity
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Cookie: cartToken={{CART-TOKEN}}
+
+{}
+
+# → pegue el valor de la cookie cartToken en @CART-TOKEN (variable de arriba)
+
+# -------------------------------------------------------------
+# PASO 8 (opcional) — Evaluar el cupón sobre las líneas a comprar
+# Los montos viajan como STRING con exactamente 2 decimales.
+# -------------------------------------------------------------
+### PASO 8a — Evaluar cupón
+POST {{API-V1}}/coupons/evaluate
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+{
+  "code": "BIENVENIDA10",
+  "alreadyAppliedCouponCount": 0,
+  "items": [
+    {
+      "linePublicId": "line-1",
+      "variantPublicId": "{{VARIANT-A}}",
+      "categoryPublicId": "<categoryPublicId-del-producto>",
+      "quantity": 1,
+      "unitPriceGross": "1099.00",
+      "subtotalGross": "1099.00"
+    }
+  ]
+}
+
+# -------------------------------------------------------------
+# PASO 9 — Reservar stock y cotizar (CLIENTE)
+# Devuelve la cotización (totales con IVA) + reservationPublicId.
+# La reserva bloquea el stock; si el cliente abandona, líbrese con
+# DELETE /checkout/reservations/:id (ver comentario tras el request).
+# -------------------------------------------------------------
+### PASO 9a — Iniciar checkout (reserva)
+POST {{API-V1}}/checkout/reserve
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+{
+  "items": [
+    { "variantPublicId": "{{VARIANT-A}}", "quantity": 1 },
+    { "variantPublicId": "{{VARIANT-B}}", "quantity": 2 }
+  ],
+  "addressPublicId": "{{ADDRESS-ID}}"
+}
+
+# → pegue el reservationPublicId en @RESERVATION-ID (variable de arriba)
+
+# (Opcional) Si se abandona el checkout:
+# DELETE {{API-V1}}/checkout/reservations/{{RESERVATION-ID}}
+# Origin: {{ORIGIN}}
+# Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+# -------------------------------------------------------------
+# PASO 10 — Confirmar la compra (CLIENTE)
+# El header Idempotency-Key es OBLIGATORIO y único por intento real:
+# el mismo key con los mismos datos devuelve la confirmación ya
+# existente en lugar de duplicar la orden.
+# payment (discriminated union):
+#   - BANK_TRANSFER: { method, bankName, referenceNumber }  -> queda PENDING_PAYMENT_VERIFICATION
+#   - CASH_ON_DELIVERY: { method }                          -> queda CONFIRMED (pago al entregar)
+#   - CARD: { method, source }                              -> queda CONFIRMED
+# -------------------------------------------------------------
+### PASO 10a — Confirmar con transferencia bancaria
+POST {{API-V1}}/checkout/confirm
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+Idempotency-Key: wf-compra-confirm-010
+
+{
+  "reservationPublicId": "{{RESERVATION-ID}}",
+  "addressPublicId": "{{ADDRESS-ID}}",
+  "items": [
+    { "variantPublicId": "{{VARIANT-A}}", "quantity": 1 },
+    { "variantPublicId": "{{VARIANT-B}}", "quantity": 2 }
+  ],
+  "cartToken": "{{CART-TOKEN}}",
+  "payment": {
+    "method": "BANK_TRANSFER",
+    "bankName": "Banco Industrial",
+    "referenceNumber": "BT-20261102-000788"
+  }
+}
+
+# → pegue el orderPublicId en @ORDER-ID (variable de arriba)
+
+# -------------------------------------------------------------
+# PASO 11 — Login del staff (OPERADOR o ADMINISTRADOR)
+# -------------------------------------------------------------
+### PASO 11a — Login del operador
+POST {{API-V1}}/auth/login
+Content-Type: application/json
+Origin: {{ORIGIN}}
+
+{
+  "email": "bryan@gmail.com",
+  "password": "algo1234"
+}
+
+# → pegue el accessToken en @STAFF-TOKEN (variable de arriba)
+
+# -------------------------------------------------------------
+# PASO 12 — Verificar el pago de la transferencia (STAFF)
+# APPROVE deja la orden CONFIRMED (pago PAID). Sin este paso la
+# orden queda PENDING_PAYMENT_VERIFICATION y no aplica logística.
+# -------------------------------------------------------------
+### PASO 12a — Aprobar el pago
+POST {{API-V1}}/checkout/orders/{{ORDER-ID}}/verify-payment
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+{
+  "decided": "APPROVE"
+}
+
+# -------------------------------------------------------------
+# PASO 13 — Ciclo logístico (STAFF): PREPARING -> SHIPPED -> DELIVERED
+# targetStatus solo admite hacia adelante; repita el request
+# cambiando targetStatus en cada avance.
+# -------------------------------------------------------------
+### PASO 13a — A PREPARING
+PATCH {{API-V1}}/orders/admin/{{ORDER-ID}}/status
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+{
+  "targetStatus": "PREPARING",
+  "reason": "Picking de la orden"
+}
+
+### PASO 13b — A SHIPPED
+PATCH {{API-V1}}/orders/admin/{{ORDER-ID}}/status
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+{
+  "targetStatus": "SHIPPED",
+  "reason": "En camino con repartidor"
+}
+
+### PASO 13c — A DELIVERED
+PATCH {{API-V1}}/orders/admin/{{ORDER-ID}}/status
+Content-Type: application/json
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
+
+{
+  "targetStatus": "DELIVERED",
+  "reason": "Entregado y firmado por el receptor"
+}
+
+# -------------------------------------------------------------
+# PASO 14 — Verificaciones finales
+# -------------------------------------------------------------
+### PASO 14a — El cliente ve su orden
+GET {{API-V1}}/orders/{{ORDER-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+### PASO 14b — El cliente lista sus órdenes entregadas
+GET {{API-V1}}/orders?orderStatus=DELIVERED&page=1&pageSize=20
+Origin: {{ORIGIN}}
+Authorization: Bearer {{CUSTOMER-TOKEN}}
+
+### PASO 14c — El staff consulta la orden
+GET {{API-V1}}/orders/admin/{{ORDER-ID}}
+Origin: {{ORIGIN}}
+Authorization: Bearer {{STAFF-TOKEN}}
