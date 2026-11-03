@@ -144,7 +144,7 @@ export class Product {
    */
   activate(activeVariantCoverIds: readonly (number | null)[]): void {
     this.assertNotDeleted();
-    // Manejo de portadas en la activación, comentado por decisión del equipo:
+    // Omitted:
     // if (this.state.coverImageId === null || activeVariantCoverIds.length === 0 ||
     //     activeVariantCoverIds.some((id) => id === null)) {
     //   throw new BusinessRuleViolation(
