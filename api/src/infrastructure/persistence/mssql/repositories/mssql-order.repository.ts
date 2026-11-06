@@ -31,10 +31,10 @@ const PROCEDURES = {
   listByCustomer: "SP_Pedidos_ListarPorCliente",
   listAdmin: "SP_Pedidos_ListarAdmin",
   findOrderDetail: "SP_Pedidos_ObtenerDetallePorIDPublico",
-  listOrderLines: "SP_Pedidos_ListarDetallePorIDPublico",
-  listOrderHistory: "SP_Pedidos_HistorialListarPorIDPublico",
+  listOrderLines: "SP_Pedidos_ListarDetallePorID",
+  listOrderHistory: "SP_Pedidos_HistorialListarPorID",
   updateOrderStatus: "SP_Pedidos_ActualizarEstado",
-  applyLineReturn: "SP_PedidosDetalle_RegistrarDevolucion",
+  applyLineReturn: "SP_PedidosDetalle_RegistrarDevolucionPorID",
 } as const;
 
 /** Reads a DECIMAL(10, 2) column; the driver may deliver numbers or strings. */
@@ -210,10 +210,12 @@ function toOrderDetailView(row: SqlRow): OrderDetailView {
   };
 }
 
-/** Maps one frozen line row (SP_Pedidos_ListarDetallePorIDPublico). */
+/** Maps one frozen line row (SP_Pedidos_ListarDetallePorID). */
 function toOrderLineSnapshot(row: SqlRow): OrderLineSnapshot {
   return {
+    lineId: readNumber(row, "IDPedidoDetalle"),
     linePublicId: readUuid(row, "IDPublico").toLowerCase(),
+    variantId: readNumber(row, "IDVariante"),
     variantPublicId: readUuid(row, "IDPublicoVariante").toLowerCase(),
     sku: readString(row, "SKU"),
     productName: readString(row, "NombreProducto"),
@@ -228,7 +230,7 @@ function toOrderLineSnapshot(row: SqlRow): OrderLineSnapshot {
   };
 }
 
-/** Maps one history row (SP_Pedidos_HistorialListarPorIDPublico). */
+/** Maps one history row (SP_Pedidos_HistorialListarPorID). */
 function toOrderHistoryEntryView(row: SqlRow): OrderHistoryEntryView {
   return {
     previousStatus: parseEnumOrNull<OrderStatus>(
@@ -335,23 +337,23 @@ export class MssqlOrderRepository
     return toOrderDetailView(row);
   }
 
-  async listLines(orderPublicId: string): Promise<OrderLineSnapshot[]> {
+  async listLines(orderId: number): Promise<OrderLineSnapshot[]> {
     const result = await this.executor.execute(PROCEDURES.listOrderLines, [
       {
-        name: "IDPublicoPedido",
-        type: sql.UniqueIdentifier,
-        value: orderPublicId,
+        name: "IDPedido",
+        type: sql.Int,
+        value: orderId,
       },
     ]);
     return (result.recordset ?? []).map(toOrderLineSnapshot);
   }
 
-  async listHistory(orderPublicId: string): Promise<OrderHistoryEntryView[]> {
+  async listHistory(orderId: number): Promise<OrderHistoryEntryView[]> {
     const result = await this.executor.execute(PROCEDURES.listOrderHistory, [
       {
-        name: "IDPublicoPedido",
-        type: sql.UniqueIdentifier,
-        value: orderPublicId,
+        name: "IDPedido",
+        type: sql.Int,
+        value: orderId,
       },
     ]);
     return (result.recordset ?? []).map(toOrderHistoryEntryView);
@@ -387,9 +389,9 @@ export class MssqlOrderRepository
   ): Promise<void> {
     await executor.execute(PROCEDURES.applyLineReturn, [
       {
-        name: "IDPublicoDetalle",
-        type: sql.UniqueIdentifier,
-        value: command.linePublicId,
+        name: "IDPedidoDetalle",
+        type: sql.Int,
+        value: command.lineId,
       },
       {
         name: "NuevaCantidadDevuelta",

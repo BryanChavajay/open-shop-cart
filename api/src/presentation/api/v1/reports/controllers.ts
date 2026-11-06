@@ -34,20 +34,20 @@ export function createReportsControllers(deps: RouterDependencies): ReportsContr
         .json(salesByPeriodReportSchema.parse(report));
     },
     salesByCategory: async (_req, res) => {
-      const report = await reports.queries.salesByCategory.execute(
+      const items = await reports.queries.salesByCategory.execute(
         res.locals.validated.query,
       );
       res
         .set("Cache-Control", "no-store")
-        .json(salesByCategoryReportSchema.parse(report));
+        .json(salesByCategoryReportSchema.parse({ items }));
     },
     topProducts: async (_req, res) => {
-      const report = await reports.queries.topProducts.execute(
+      const items = await reports.queries.topProducts.execute(
         res.locals.validated.query,
       );
       res
         .set("Cache-Control", "no-store")
-        .json(topSellingProductsReportSchema.parse(report));
+        .json(topSellingProductsReportSchema.parse({ items }));
     },
     // Admin order listing for report drill-down: mirrors the orders module.
     orders: async (_req, res) => {

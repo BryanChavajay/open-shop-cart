@@ -58,9 +58,9 @@ const PROCEDURES = {
   insertPayment: "SP_Pedidos_PagoRegistrar",
   appendHistory: "SP_Pedidos_HistorialAgregar",
   findOrderForVerification: "SP_Pedidos_ObtenerBloquearParaVerificarPago",
-  listOrderLines: "SP_Pedidos_DetalleListar",
+  listOrderLines: "SP_Pedidos_DetalleListarPorID",
   applyVerification: "SP_Pedidos_ActualizarVerificacionPago",
-  findOrderPublic: "SP_Pedidos_ObtenerPorIDPublico",
+  findOrderInternal: "SP_Pedidos_ObtenerPorID",
 } as const;
 
 /** THROW numbers raised by the checkout/orders procedures (range 50550..50560, migration 010). */
@@ -134,6 +134,7 @@ function toQuotedVariant(row: SqlRow): QuotedVariant {
 function toOrderLineRow(row: SqlRow): OrderLineRow {
   return {
     linePublicId: readUuid(row, "IDPublico"),
+    variantId: readNumber(row, "IDVariante"),
     variantPublicId: readString(row, "IDPublicoVariante").toLowerCase(),
     sku: readString(row, "SKU"),
     productName: readString(row, "NombreProducto"),
@@ -199,14 +200,10 @@ export class MssqlCheckoutRepository
 
   async findOrderRow(
     executor: CommandExecutor,
-    context: { orderPublicId: string; customerId: number },
+    context: { orderId: number; customerId: number },
   ): Promise<OrderVerificationRow | null> {
-    const result = await executor.execute(PROCEDURES.findOrderPublic, [
-      {
-        name: "IDPublico",
-        type: sql.UniqueIdentifier,
-        value: context.orderPublicId,
-      },
+    const result = await executor.execute(PROCEDURES.findOrderInternal, [
+      { name: "IDPedido", type: sql.Int, value: context.orderId },
       { name: "IDUsuario", type: sql.Int, value: context.customerId },
     ]);
     const row = firstRow(result.recordset);
@@ -248,13 +245,13 @@ export class MssqlCheckoutRepository
 
   async listOrderLines(
     executor: CommandExecutor,
-    orderPublicId: string,
+    orderId: number,
   ): Promise<OrderLineRow[]> {
     const result = await executor.execute(PROCEDURES.listOrderLines, [
       {
-        name: "IDPublicoPedido",
-        type: sql.UniqueIdentifier,
-        value: orderPublicId,
+        name: "IDPedido",
+        type: sql.Int,
+        value: orderId,
       },
     ]);
     return (result.recordset ?? []).map(toOrderLineRow);

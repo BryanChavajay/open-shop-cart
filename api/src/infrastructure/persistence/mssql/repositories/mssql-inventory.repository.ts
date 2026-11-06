@@ -30,7 +30,8 @@ import type { SqlExecutor, SqlRow } from "../sql-executor.js";
 const PROCEDURES = {
   applyPhysicalStockChange: "SP_Inventario_VarianteActualizarExistencia",
   insertMovement: "SP_Inventario_MovimientoAgregar",
-  findMovementByPublicId: "SP_Inventario_MovimientoObtenerPorIDPublico",
+  findSaleMovementByOrderAndVariant:
+    "SP_Inventario_MovimientoVentaObtenerPorPedidoYVariante",
   sumReintegrated: "SP_Inventario_MovimientosSumarReintegrados",
   findBalanceByPublicId: "SP_Inventario_SaldoObtenerPorVariante",
   fetchLockedBalances: "SP_Inventario_SaldosBloquearDeVariantes",
@@ -41,6 +42,8 @@ const PROCEDURES = {
   findReservationByPublicId: "SP_Inventario_ReservasObtenerPorIDPublico",
   fetchActiveReservation: "SP_Inventario_ReservasObtenerBloquearActiva",
   fetchLockedReservation: "SP_Inventario_ReservasObtenerBloquearEstado",
+  fetchLockedReservationById:
+    "SP_Inventario_ReservasObtenerBloquearEstadoPorID",
   findReservationBySourceReference:
     "SP_Inventario_ReservasObtenerPorReferencia",
   updateReservationStatus: "SP_Inventario_ReservasEstadoActualizar",
@@ -59,6 +62,11 @@ function readIsoDate(row: SqlRow, column: string): string {
     return value.toISOString();
   }
   throw new TypeError(`Se esperaba fecha en la columna ${column}`);
+}
+
+function readOptionalNullableNumber(row: SqlRow, column: string): number | null {
+  if (!(column in row) || row[column] === null) return null;
+  return readNumber(row, column);
 }
 
 function toBalanceState(row: SqlRow): StockBalanceSnapshot {
@@ -94,6 +102,11 @@ function toMovementState(row: SqlRow): StockMovementSnapshot {
     userId: readNumber(row, "IDUsuario"),
     reason: readString(row, "Motivo"),
     sourceReference: readNullableString(row, "ReferenciaOrigen"),
+    orderId: readOptionalNullableNumber(row, "IDPedido"),
+    relatedSaleMovementId: readOptionalNullableNumber(
+      row,
+      "IDMovimientoVentaRelacionado",
+    ),
     relatedSalePublicId: readNullableString(row, "IDPublicoVentaRelacionada"),
     createdAt: readIsoDate(row, "FechaRegistro"),
   };
@@ -271,9 +284,14 @@ export class MssqlInventoryRepository
         value: movement.sourceReference,
       },
       {
-        name: "IDPublicoVentaRelacionada",
-        type: sql.UniqueIdentifier,
-        value: movement.relatedSalePublicId,
+        name: "IDPedido",
+        type: sql.Int,
+        value: movement.orderId ?? null,
+      },
+      {
+        name: "IDMovimientoVentaRelacionado",
+        type: sql.BigInt,
+        value: movement.relatedSaleMovementId ?? null,
       },
     ]);
     const row = firstRow(result.recordset);
@@ -485,7 +503,9 @@ export class MssqlInventoryRepository
         { name: "FechaAsOf", type: sql.DateTime2(3), value: asOf },
       ],
     );
-    const row = firstRow(result.recordset);
+    // The procedure first returns the IDs it locked with UPDLOCK/HOLDLOCK;
+    // its second recordset contains the boolean result of the guard.
+    const row = firstRow(result.recordsets[1]);
     return row !== null && readBoolean(row, "TieneSaldoOReservas");
   }
 
@@ -596,6 +616,19 @@ export class MssqlInventoryRepository
     );
   }
 
+  async fetchLockedReservationById(
+    executor: CommandExecutor,
+    reservationInternalId: number,
+  ): Promise<StockReservationSnapshot | null> {
+    const result = await executor.execute(PROCEDURES.fetchLockedReservationById, [
+      { name: "IDReserva", type: sql.Int, value: reservationInternalId },
+    ]);
+    return toReservationFromRecordsets(
+      result.recordsets[0],
+      result.recordsets[1],
+    );
+  }
+
   async findReservationBySourceReference(
     sourceReference: string,
     asOf: string,
@@ -617,12 +650,17 @@ export class MssqlInventoryRepository
     );
   }
 
-  async findMovementByPublicId(
-    publicId: string,
+  async findSaleMovementByOrderAndVariant(
+    executor: CommandExecutor,
+    orderInternalId: number,
+    variantInternalId: number,
   ): Promise<StockMovementSnapshot | null> {
-    const result = await this.executor.execute(
-      PROCEDURES.findMovementByPublicId,
-      [{ name: "IDPublico", type: sql.UniqueIdentifier, value: publicId }],
+    const result = await executor.execute(
+      PROCEDURES.findSaleMovementByOrderAndVariant,
+      [
+        { name: "IDPedido", type: sql.Int, value: orderInternalId },
+        { name: "IDVariante", type: sql.Int, value: variantInternalId },
+      ],
     );
     const row = firstRow(result.recordset);
     return row === null ? null : toMovementState(row);
@@ -630,13 +668,13 @@ export class MssqlInventoryRepository
 
   async sumReintegrated(
     executor: CommandExecutor,
-    saleMovementPublicId: string,
+    saleMovementId: number,
   ): Promise<number> {
     const result = await executor.execute(PROCEDURES.sumReintegrated, [
       {
-        name: "IDPublicoVentaRelacionada",
-        type: sql.UniqueIdentifier,
-        value: saleMovementPublicId,
+        name: "IDMovimientoVentaRelacionado",
+        type: sql.BigInt,
+        value: saleMovementId,
       },
     ]);
     const row = firstRow(result.recordset);
