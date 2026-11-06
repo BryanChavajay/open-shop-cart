@@ -163,7 +163,7 @@ export class ConfirmCheckout {
             undefined,
           );
         }
-        return this.replay(exec, operation.orderPublicId, command.customerId);
+        return this.replay(exec, operation.orderId, command.customerId);
       }
 
       // (2) Address + reservation ownership (unknown/foreign = specific 404).
@@ -207,6 +207,7 @@ export class ConfirmCheckout {
       // redemption and the reservation consumption both reference it.
       const orderPublicId = this.identifiers.newPublicId();
       let allocations = new Map<string, string>();
+      let couponId: number | null = null;
       let couponCode: string | null = null;
       if (command.couponCode !== undefined) {
         const redeemed = await this.coupons.redeem.execute({
@@ -224,6 +225,7 @@ export class ConfirmCheckout {
             a.discountGross,
           ]),
         );
+        couponId = redeemed.couponId;
         couponCode = redeemed.code;
       }
 
@@ -258,7 +260,7 @@ export class ConfirmCheckout {
         userId: command.customerId,
         addressOriginPublicId: address.publicId,
         reservationId: reservationInternalId,
-        couponId: null,
+        couponId,
         couponCode,
         recipientFirstName: address.recipientFirstName,
         recipientLastName: address.recipientLastName,
@@ -339,8 +341,8 @@ export class ConfirmCheckout {
       // STOCK_RESERVATION_EXPIRED and rolls the whole confirmation back.
       await this.inventory.consume.execute({
         actor: { id: command.customerId },
-        reservationPublicId: command.reservationPublicId,
-        salePublicId: orderPublicId,
+        reservationId: reservationInternalId,
+        orderId,
         joinExecutor: exec,
       });
 
@@ -403,11 +405,11 @@ export class ConfirmCheckout {
   /** Builds the replayed confirmation from the stored order. */
   private async replay(
     exec: CommandExecutor,
-    orderPublicId: string,
+    orderId: number,
     customerId: number,
   ): Promise<CheckoutConfirmationReadModel> {
     const header = await this.checkoutReads.findOrderRow(exec, {
-      orderPublicId,
+      orderId,
       customerId,
     });
     if (header === null) {
@@ -418,10 +420,7 @@ export class ConfirmCheckout {
         undefined,
       );
     }
-    const lineRows = await this.checkoutReads.listOrderLines(
-      exec,
-      orderPublicId,
-    );
+    const lineRows = await this.checkoutReads.listOrderLines(exec, orderId);
     return {
       orderPublicId: header.publicId,
       orderNumber: header.orderNumber,

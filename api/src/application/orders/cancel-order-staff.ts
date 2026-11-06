@@ -76,7 +76,7 @@ export class CancelOrderByStaff {
       let reintegratedUnits = 0;
       const lines = await this.checkoutReads.listOrderLines(
         exec,
-        updated.publicId,
+        updated.id!,
       );
       for (const line of lines) {
         const pending = line.quantity - line.quantityReturned;
@@ -85,7 +85,8 @@ export class CancelOrderByStaff {
         }
         await this.inventory.reintegrateCancellation.execute({
           actor: { id: command.actor.id },
-          relatedSalePublicId: updated.publicId,
+          orderId: updated.id!,
+          variantId: line.variantId,
           variantPublicId: line.variantPublicId,
           quantity: pending,
           joinExecutor: exec,

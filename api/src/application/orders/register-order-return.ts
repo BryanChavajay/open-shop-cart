@@ -17,6 +17,7 @@ import { ErrorCode } from "../../domain/shared/enums/error-code.enum.js";
 import { auditEntryForOrders } from "./shared/audit.js";
 import type { OrderActor } from "./shared/dependencies.js";
 import { optionalReason } from "./cancel-own-order.js";
+import { requireInternalId } from "../shared/entity-ids.js";
 
 /** One line of a customer return request. */
 export interface OrderReturnItem {
@@ -103,8 +104,9 @@ export class RegisterOrderReturn {
       // DELIVERED-only window of returns.
       const order = Order.restore(snapshot);
       order.assertReturnable();
+      const orderId = requireInternalId(order.id);
 
-      const lines = await this.orderReads.listLines(order.publicId);
+      const lines = await this.orderReads.listLines(orderId);
       const byLine = new Map(lines.map((line) => [line.linePublicId, line]));
 
       const updatedLines: OrderReturnLineReadModel[] = [];
@@ -121,14 +123,13 @@ export class RegisterOrderReturn {
         }
         const updated = applyReturnLine(line, item.quantity, occurredAt);
         await this.orderWrites.applyLineReturn(exec, {
-          linePublicId: updated.linePublicId,
+          lineId: updated.lineId,
           newQuantityReturned: updated.quantityReturned,
           occurredAt,
         });
         await this.reintegrateReturn(
           command.actor,
-          order.publicId,
-          item.linePublicId,
+          orderId,
           updated,
           item.quantity,
           exec,
@@ -184,17 +185,17 @@ export class RegisterOrderReturn {
    */
   private async reintegrateReturn(
     actor: OrderActor,
-    orderPublicId: string,
-    linePublicId: string,
+    orderId: number,
     updated: OrderLineSnapshot,
     quantity: number,
     exec: CommandExecutor,
   ): Promise<void> {
     await this.inventory.reintegrateReturn.execute({
       actor: { id: actor.id },
-      relatedSalePublicId: orderPublicId,
+      orderId,
+      variantId: updated.variantId,
       variantPublicId: updated.variantPublicId,
-      returnReference: linePublicId,
+      returnLineId: updated.lineId,
       quantity,
       joinExecutor: exec,
     });

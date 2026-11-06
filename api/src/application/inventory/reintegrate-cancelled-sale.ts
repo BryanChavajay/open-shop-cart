@@ -24,11 +24,14 @@ import { auditEntryForInventory } from "./shared/audit.js";
 import { assembleStockMovement } from "./shared/movement-assembler.js";
 import { canonicalFingerprint } from "./shared/options.js";
 import type { StockOperationResult } from "./receive-purchase-stock.js";
+import { requireInternalId } from "../shared/entity-ids.js";
 
 export interface ReintegrateCancelledSaleCommand {
   actor: InventoryActor;
-  /** Public identifier of the original SALE movement being reintegrated. */
-  relatedSalePublicId: string;
+  /** Internal identifier of the already-resolved order. */
+  orderId: number;
+  /** Internal identifier of the variant in the order line. */
+  variantId: number;
   /** Public identifier of the variant receiving the units back. */
   variantPublicId: string;
   /** Defaults to the full sold quantity; must not exceed what is pending. */
@@ -51,7 +54,7 @@ export const REINTEGRATE_CANCELLED_SALE_OPERATION = "SALE_CANCELLATION";
  * reintegration is capped at the sold quantity, so repeated calls cannot
  * over-reintegrate.
  *
- * Idempotency: the operation key is the related sale public id, so retries of
+ * Idempotency: the operation key is the concrete internal sale movement, so retries of
  * the same cancellation replay the original movement (equal fingerprint) and a
  * different quantity is rejected with ConflictError/IDEMPOTENCY_CONFLICT.
  */
@@ -68,10 +71,8 @@ export class ReintegrateCancelledSale {
   async execute(
     command: ReintegrateCancelledSaleCommand,
   ): Promise<StockOperationResult> {
-    const relatedSalePublicId = requirePublicId(
-      command.relatedSalePublicId,
-      "relatedSalePublicId",
-    );
+    const orderId = requirePositiveInteger(command.orderId, "orderId");
+    const variantId = requirePositiveInteger(command.variantId, "variantId");
     const variantPublicId = requirePublicId(
       command.variantPublicId,
       "variantPublicId",
@@ -81,37 +82,40 @@ export class ReintegrateCancelledSale {
       requirePositiveInteger(command.quantity, "quantity");
     }
 
-    // --- Prerequisites validated before opening the transaction ---
-    const sale = await this.reads.findMovementByPublicId(relatedSalePublicId);
-    if (sale === null) {
-      throw new NotFoundError(
-        "Sale movement not found",
-        undefined,
-        undefined,
-        undefined,
-      );
-    }
-    if (sale.movementType !== StockMovementType.SALE) {
-      throw new ConflictError(
-        "The referenced movement is not a sale",
-        undefined,
-        "relatedSalePublicId",
-        undefined,
-      );
-    }
-    if (sale.variantPublicId !== variantPublicId) {
-      throw new ConflictError(
-        "The variant does not match the referenced sale movement",
-        ErrorCode.INVALID_INPUT,
-        "variantPublicId",
-        undefined,
-      );
-    }
-    const quantity = command.quantity ?? Math.abs(sale.quantityDelta);
-    const fingerprint = canonicalFingerprint({ relatedSalePublicId, quantity });
-    const idempotencyKey = relatedSalePublicId;
-
     const scope: TransactionScope<StockOperationResult> = async (exec) => {
+      const sale = await this.reads.findSaleMovementByOrderAndVariant(
+        exec,
+        orderId,
+        variantId,
+      );
+      if (sale === null) {
+        throw new NotFoundError(
+          "Sale movement not found",
+          undefined,
+          undefined,
+          undefined,
+        );
+      }
+      if (sale.movementType !== StockMovementType.SALE) {
+        throw new ConflictError(
+          "The referenced movement is not a sale",
+          undefined,
+          "orderId",
+          undefined,
+        );
+      }
+      if (sale.variantPublicId !== variantPublicId) {
+        throw new ConflictError(
+          "The variant does not match the referenced sale movement",
+          ErrorCode.INVALID_INPUT,
+          "variantPublicId",
+          undefined,
+        );
+      }
+      const saleMovementId = requireInternalId(sale.id);
+      const quantity = command.quantity ?? Math.abs(sale.quantityDelta);
+      const fingerprint = canonicalFingerprint({ saleMovementId, quantity });
+      const idempotencyKey = String(saleMovementId);
       const operation = await this.writes.findOperation(
         exec,
         REINTEGRATE_CANCELLED_SALE_OPERATION,
@@ -149,7 +153,7 @@ export class ReintegrateCancelledSale {
       const soldQuantity = Math.abs(sale.quantityDelta);
       const reintegrated = await this.reads.sumReintegrated(
         exec,
-        relatedSalePublicId,
+        saleMovementId,
       );
       if (reintegrated + quantity > soldQuantity) {
         throw new ConflictError(
@@ -160,13 +164,13 @@ export class ReintegrateCancelledSale {
         );
       }
 
-      const reason = `Reintegration of cancelled sale ${relatedSalePublicId}`;
+      const reason = `Reintegration of cancelled sale ${sale.publicId}`;
       const applied = balance.applyMovement(
         StockMovementType.SALE_CANCELLATION,
         quantity,
         reason,
         null,
-        relatedSalePublicId,
+        null,
         asOf,
       );
       const movement = assembleStockMovement({
@@ -180,7 +184,9 @@ export class ReintegrateCancelledSale {
         userId: command.actor.id,
         reason,
         sourceReference: null,
-        relatedSalePublicId,
+        orderId,
+        relatedSaleMovementId: saleMovementId,
+        relatedSalePublicId: null,
       });
 
       await this.writes.insertMovement(exec, movement.toSnapshot());

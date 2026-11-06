@@ -43,8 +43,8 @@ export class GetAdminOrderDetail {
     }
 
     const [lines, history] = await Promise.all([
-      this.orderReads.listLines(query.orderPublicId),
-      this.orderReads.listHistory(query.orderPublicId),
+      this.orderReads.listLines(detail.id),
+      this.orderReads.listHistory(detail.id),
     ]);
 
     return { order: detail, lines, history };

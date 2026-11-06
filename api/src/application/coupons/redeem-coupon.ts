@@ -45,6 +45,14 @@ export interface RedeemCouponCommand {
 }
 
 /**
+ * A redemption additionally exposes the persisted coupon identifier so an
+ * enclosing checkout can retain the order-to-coupon relationship.
+ */
+export interface RedeemedCouponApplicationResult extends CouponApplicationResult {
+  readonly couponId: number;
+}
+
+/**
  * Redeems a coupon transactionally: locks the coupon row by code together
  * with the customer's use count (UPDLOCK read), re-validates every
  * redemption condition through the entity, computes the per-line discount
@@ -73,12 +81,12 @@ export class RedeemCoupon {
 
   async execute(
     command: RedeemCouponCommand,
-  ): Promise<CouponApplicationResult> {
+  ): Promise<RedeemedCouponApplicationResult> {
     requireValidCustomerId(command.customerId);
     const code = requireNonEmptyCode(command.code);
     const saleReference = requireSaleReference(command.saleReference);
 
-    const scope: TransactionScope<CouponApplicationResult> = async (exec) => {
+    const scope: TransactionScope<RedeemedCouponApplicationResult> = async (exec) => {
       const now = this.clock.now();
 
       // Row-locked read of the coupon plus this customer's recorded uses; the
@@ -153,12 +161,15 @@ export class RedeemCoupon {
         exec,
       );
 
-      return buildCouponApplicationResult(
-        coupon,
-        command.items,
-        eligible,
-        allocations,
-      );
+      return {
+        ...buildCouponApplicationResult(
+          coupon,
+          command.items,
+          eligible,
+          allocations,
+        ),
+        couponId: requireInternalId(coupon.id),
+      };
     };
 
     return runOrJoin(command.joinExecutor ?? null, this.unitOfWork, scope);

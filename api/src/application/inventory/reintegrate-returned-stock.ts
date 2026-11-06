@@ -14,10 +14,8 @@ import { ConflictError } from "../../domain/shared/errors/conflict-error.js";
 import { NotFoundError } from "../../domain/shared/errors/not-found.js";
 import { ErrorCode } from "../../domain/shared/enums/error-code.enum.js";
 import {
-  REFERENCE_MAX_LENGTH,
   requirePositiveInteger,
   requirePublicId,
-  requireTrimmedText,
 } from "../../domain/inventory/entities/inventory-rules.js";
 import type { UnitOfWork, TransactionScope } from "../shared/unit-of-work.js";
 import { runOrJoin } from "../shared/unit-of-work.js";
@@ -26,15 +24,18 @@ import { auditEntryForInventory } from "./shared/audit.js";
 import { assembleStockMovement } from "./shared/movement-assembler.js";
 import { canonicalFingerprint } from "./shared/options.js";
 import type { StockOperationResult } from "./receive-purchase-stock.js";
+import { requireInternalId } from "../shared/entity-ids.js";
 
 export interface ReintegrateReturnedStockCommand {
   actor: InventoryActor;
-  /** Public identifier of the original SALE movement of the returned units. */
-  relatedSalePublicId: string;
+  /** Internal identifier of the already-resolved order. */
+  orderId: number;
+  /** Internal identifier of the variant in the returned order line. */
+  variantId: number;
   /** Public identifier of the variant receiving the units back. */
   variantPublicId: string;
-  /** Mandatory reference of the customer return (return note, claim...). */
-  returnReference: string;
+  /** Internal identifier of the returned order line. */
+  returnLineId: number;
   /** Defaults to the full sold quantity; must not exceed what is pending. */
   quantity?: number | undefined;
   /** Executor of an already open transaction to join instead of opening one. */
@@ -45,19 +46,8 @@ export interface ReintegrateReturnedStockCommand {
 export const REINTEGRATE_RETURNED_STOCK_OPERATION = "CUSTOMER_RETURN";
 
 /**
- * Reintegrates into the physical stock the units of a customer return: one
- * CUSTOMER_RETURN kardex movement (positive delta) linked to the original SALE
- * movement, plus the physical stock change, audit and idempotency receipt
- * inside one transaction.
- *
- * Cumulative protection: the units already reintegrated against the same sale
- * (by cancellations and customer returns) are summed under lock; the
- * reintegration is capped at the sold quantity.
- *
- * Idempotency: the operation key is `relatedSalePublicId:returnReference`, so
- * retries of the same return line replay the original movement (equal
- * fingerprint) and different content is rejected with
- * ConflictError/IDEMPOTENCY_CONFLICT.
+ * Reintegrates returned units into physical stock and links the compensating
+ * movement to the concrete SALE movement of the already-resolved order.
  */
 export class ReintegrateReturnedStock {
   constructor(
@@ -72,59 +62,60 @@ export class ReintegrateReturnedStock {
   async execute(
     command: ReintegrateReturnedStockCommand,
   ): Promise<StockOperationResult> {
-    const relatedSalePublicId = requirePublicId(
-      command.relatedSalePublicId,
-      "relatedSalePublicId",
-    );
+    const orderId = requirePositiveInteger(command.orderId, "orderId");
+    const variantId = requirePositiveInteger(command.variantId, "variantId");
     const variantPublicId = requirePublicId(
       command.variantPublicId,
       "variantPublicId",
     );
-    const returnReference = requireTrimmedText(
-      command.returnReference,
-      "returnReference",
-      REFERENCE_MAX_LENGTH,
+    const returnLineId = requirePositiveInteger(
+      command.returnLineId,
+      "returnLineId",
     );
     requirePositiveInteger(command.actor.id, "actor.id");
     if (command.quantity !== undefined && command.quantity !== null) {
       requirePositiveInteger(command.quantity, "quantity");
     }
 
-    // --- Prerequisites validated before opening the transaction ---
-    const sale = await this.reads.findMovementByPublicId(relatedSalePublicId);
-    if (sale === null) {
-      throw new NotFoundError(
-        "Sale movement not found",
-        undefined,
-        undefined,
-        undefined,
-      );
-    }
-    if (sale.movementType !== StockMovementType.SALE) {
-      throw new ConflictError(
-        "The referenced movement is not a sale",
-        undefined,
-        "relatedSalePublicId",
-        undefined,
-      );
-    }
-    if (sale.variantPublicId !== variantPublicId) {
-      throw new ConflictError(
-        "The variant does not match the referenced sale movement",
-        ErrorCode.INVALID_INPUT,
-        "variantPublicId",
-        undefined,
-      );
-    }
-    const quantity = command.quantity ?? Math.abs(sale.quantityDelta);
-    const fingerprint = canonicalFingerprint({
-      relatedSalePublicId,
-      returnReference,
-      quantity,
-    });
-    const idempotencyKey = `${relatedSalePublicId}:${returnReference}`;
-
     const scope: TransactionScope<StockOperationResult> = async (exec) => {
+      const sale = await this.reads.findSaleMovementByOrderAndVariant(
+        exec,
+        orderId,
+        variantId,
+      );
+      if (sale === null) {
+        throw new NotFoundError(
+          "Sale movement not found",
+          undefined,
+          undefined,
+          undefined,
+        );
+      }
+      if (sale.movementType !== StockMovementType.SALE) {
+        throw new ConflictError(
+          "The referenced movement is not a sale",
+          undefined,
+          "orderId",
+          undefined,
+        );
+      }
+      if (sale.variantPublicId !== variantPublicId) {
+        throw new ConflictError(
+          "The variant does not match the referenced sale movement",
+          ErrorCode.INVALID_INPUT,
+          "variantPublicId",
+          undefined,
+        );
+      }
+
+      const saleMovementId = requireInternalId(sale.id);
+      const quantity = command.quantity ?? Math.abs(sale.quantityDelta);
+      const fingerprint = canonicalFingerprint({
+        saleMovementId,
+        returnLineId,
+        quantity,
+      });
+      const idempotencyKey = `${saleMovementId}:${returnLineId}`;
       const operation = await this.writes.findOperation(
         exec,
         REINTEGRATE_RETURNED_STOCK_OPERATION,
@@ -162,7 +153,7 @@ export class ReintegrateReturnedStock {
       const soldQuantity = Math.abs(sale.quantityDelta);
       const reintegrated = await this.reads.sumReintegrated(
         exec,
-        relatedSalePublicId,
+        saleMovementId,
       );
       if (reintegrated + quantity > soldQuantity) {
         throw new ConflictError(
@@ -173,13 +164,14 @@ export class ReintegrateReturnedStock {
         );
       }
 
-      const reason = `Reintegration of customer return ${returnReference} on sale ${relatedSalePublicId}`;
+      const returnReference = String(returnLineId);
+      const reason = `Reintegration of customer return line ${returnReference} on sale ${sale.publicId}`;
       const applied = balance.applyMovement(
         StockMovementType.CUSTOMER_RETURN,
         quantity,
         reason,
+        returnReference,
         null,
-        relatedSalePublicId,
         asOf,
       );
       const movement = assembleStockMovement({
@@ -192,8 +184,10 @@ export class ReintegrateReturnedStock {
         balanceAfter: applied.balanceAfter,
         userId: command.actor.id,
         reason,
-        sourceReference: null,
-        relatedSalePublicId,
+        sourceReference: returnReference,
+        orderId,
+        relatedSaleMovementId: saleMovementId,
+        relatedSalePublicId: null,
       });
 
       await this.writes.insertMovement(exec, movement.toSnapshot());
@@ -212,13 +206,13 @@ export class ReintegrateReturnedStock {
               physicalQuantityBefore: applied.balanceBefore,
               physicalQuantityAfter: applied.balanceAfter,
               reason,
-              sourceReference: null,
+              sourceReference: returnReference,
             },
             newValues: {
               physicalQuantityBefore: applied.balanceBefore,
               physicalQuantityAfter: applied.balanceAfter,
               reason,
-              sourceReference: null,
+              sourceReference: returnReference,
             },
           },
           command.actor,

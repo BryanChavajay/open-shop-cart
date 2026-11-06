@@ -15,10 +15,7 @@ import type { CommandExecutor } from "../../domain/shared/interfaces/providers/s
 import { NotFoundError } from "../../domain/shared/errors/not-found.js";
 import { ErrorCode } from "../../domain/shared/enums/error-code.enum.js";
 import {
-  REFERENCE_MAX_LENGTH,
   requirePositiveInteger,
-  requirePublicId,
-  requireTrimmedText,
 } from "../../domain/inventory/entities/inventory-rules.js";
 import type { UnitOfWork, TransactionScope } from "../shared/unit-of-work.js";
 import { runOrJoin } from "../shared/unit-of-work.js";
@@ -29,12 +26,10 @@ import { requireInternalId } from "../shared/entity-ids.js";
 
 export interface ConsumeStockReservationCommand {
   actor: InventoryActor;
-  reservationPublicId: string;
-  /**
-   * Sale reference stored as `relatedSalePublicId` of the generated SALE
-   * movements (the anchor used by later reintegrations or chargebacks).
-   */
-  salePublicId: string;
+  /** Reservation already resolved and authorized by the checkout flow. */
+  reservationId: number;
+  /** Newly created order associated with every generated SALE movement. */
+  orderId: number;
   /** Executor of an already open transaction to join instead of opening one. */
   joinExecutor?: CommandExecutor | null | undefined;
 }
@@ -75,24 +70,20 @@ export class ConsumeStockReservation {
   async execute(
     command: ConsumeStockReservationCommand,
   ): Promise<ConsumedStockReadModel> {
-    const reservationPublicId = requirePublicId(
-      command.reservationPublicId,
-      "reservationPublicId",
+    const reservationId = requirePositiveInteger(
+      command.reservationId,
+      "reservationId",
     );
-    const salePublicId = requireTrimmedText(
-      command.salePublicId,
-      "salePublicId",
-      REFERENCE_MAX_LENGTH,
-    );
+    const orderId = requirePositiveInteger(command.orderId, "orderId");
     requirePositiveInteger(command.actor.id, "actor.id");
 
     const scope: TransactionScope<ConsumedStockReadModel> = async (exec) => {
       const now = this.clock.now();
       const asOf = now.toISOString();
 
-      const snapshot = await this.reads.fetchLockedReservation(
+      const snapshot = await this.reads.fetchLockedReservationById(
         exec,
-        reservationPublicId,
+        reservationId,
       );
       if (snapshot === null) {
         throw new NotFoundError(
@@ -144,7 +135,7 @@ export class ConsumeStockReservation {
           -line.quantity,
           reason,
           reservation.sourceReference,
-          salePublicId,
+          null,
           asOf,
         );
         const movement = assembleStockMovement({
@@ -158,7 +149,9 @@ export class ConsumeStockReservation {
           userId: command.actor.id,
           reason,
           sourceReference: reservation.sourceReference,
-          relatedSalePublicId: salePublicId,
+          orderId,
+          relatedSaleMovementId: null,
+          relatedSalePublicId: null,
         });
         await this.writes.insertMovement(exec, movement.toSnapshot());
         await this.writes.applyPhysicalStockChange(

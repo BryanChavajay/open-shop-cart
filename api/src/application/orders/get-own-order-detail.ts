@@ -53,8 +53,8 @@ export class GetOwnOrderDetail {
     order.assertOwnedBy(query.actor.id);
 
     const [lines, history] = await Promise.all([
-      this.orderReads.listLines(order.publicId),
-      this.orderReads.listHistory(order.publicId),
+      this.orderReads.listLines(detail.id),
+      this.orderReads.listHistory(detail.id),
     ]);
 
     return { order: detail, lines, history };

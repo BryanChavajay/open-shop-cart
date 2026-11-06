@@ -22,6 +22,8 @@ export interface StockMovementAssemblingData {
   userId: number;
   reason: string;
   sourceReference: string | null;
+  orderId?: number | null;
+  relatedSaleMovementId?: number | null;
   relatedSalePublicId: string | null;
 }
 
@@ -43,6 +45,10 @@ export function assembleStockMovement(data: StockMovementAssemblingData): StockM
     userId: data.userId,
     reason: data.reason,
     sourceReference: data.sourceReference,
+    ...(data.orderId === undefined ? {} : { orderId: data.orderId }),
+    ...(data.relatedSaleMovementId === undefined
+      ? {}
+      : { relatedSaleMovementId: data.relatedSaleMovementId }),
     relatedSalePublicId: data.relatedSalePublicId,
     createdAt: data.clock.now().toISOString(),
   });

@@ -87,7 +87,7 @@ export class VerifyBankTransferPayment {
       if (command.decision === "REJECT") {
         const lines = await this.checkoutReads.listOrderLines(
           exec,
-          updated.publicId,
+          updated.id!,
         );
         for (const line of lines) {
           const pending = line.quantity - line.quantityReturned;
@@ -96,7 +96,8 @@ export class VerifyBankTransferPayment {
           }
           await this.inventory.reintegrateCancellation.execute({
             actor: { id: command.actor.id },
-            relatedSalePublicId: updated.publicId,
+            orderId: updated.id!,
+            variantId: line.variantId,
             variantPublicId: line.variantPublicId,
             quantity: pending,
             joinExecutor: exec,
