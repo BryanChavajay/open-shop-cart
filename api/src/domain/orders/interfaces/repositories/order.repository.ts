@@ -109,7 +109,7 @@ export interface OrderDetailView {
   userLastName: string;
 }
 
-/** One entry of the order state history (SP_Pedidos_HistorialListarPorIDPublico). */
+/** One entry of the order state history (SP_Pedidos_HistorialListarPorID). */
 export interface OrderHistoryEntryView {
   /** Status before the change; null for the initial creation entry. */
   previousStatus: OrderStatus | null;
@@ -155,7 +155,7 @@ export interface ApplyOrderStatusCommand {
 
 /** Persisted result of a validated line return. */
 export interface ApplyOrderLineReturnCommand {
-  linePublicId: string;
+  lineId: number;
   /** Total returned units after the applied return. */
   newQuantityReturned: number;
   occurredAt: string;
@@ -174,10 +174,10 @@ export interface OrderReadRepository {
   ): Promise<OrderSummaryPage<AdminOrderSummaryRow>>;
   /** Full header row of one order; null when it does not exist. */
   findDetailByPublicId(orderPublicId: string): Promise<OrderDetailView | null>;
-  /** Frozen lines of one order, resolved by its public id. */
-  listLines(orderPublicId: string): Promise<OrderLineSnapshot[]>;
-  /** State history of one order, chronologically ordered. */
-  listHistory(orderPublicId: string): Promise<OrderHistoryEntryView[]>;
+  /** Frozen lines of one order already resolved by its internal id. */
+  listLines(orderId: number): Promise<OrderLineSnapshot[]>;
+  /** State history of one order already resolved by its internal id. */
+  listHistory(orderId: number): Promise<OrderHistoryEntryView[]>;
 }
 
 /** Writes of the order-management module; all inside the caller transaction. */

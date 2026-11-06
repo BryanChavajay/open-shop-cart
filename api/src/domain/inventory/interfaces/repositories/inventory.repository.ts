@@ -119,23 +119,35 @@ export interface InventoryReadRepository {
    */
   fetchLockedReservation(executor: CommandExecutor, publicId: string): Promise<StockReservationSnapshot | null>;
   /**
+   * Locked (`UPDLOCK`) read of a reservation already resolved within the
+   * current transaction. Avoids resolving its public identifier again.
+   */
+  fetchLockedReservationById(
+    executor: CommandExecutor,
+    reservationInternalId: number,
+  ): Promise<StockReservationSnapshot | null>;
+  /**
    * Reservation with its lines holding the given source reference, regardless
    * of state. Null when no reservation ever used it. Plain read used as the
    * duplicate pre-check and idempotent replay of the reservation use case.
    */
   findReservationBySourceReference(sourceReference: string, asOf: string): Promise<StockReservationSnapshot | null>;
   /**
-   * One movement by its public identifier, regardless of type. Plain read.
-   * Null when not found. Used by reintegrations to validate the original sale
-   * movement they reintegrate against.
+   * SALE movement for one already-resolved order and variant. The caller's
+   * transaction executor is used so reintegrations remain in the same unit of
+   * work as the order transition.
    */
-  findMovementByPublicId(publicId: string): Promise<StockMovementSnapshot | null>;
+  findSaleMovementByOrderAndVariant(
+    executor: CommandExecutor,
+    orderInternalId: number,
+    variantInternalId: number,
+  ): Promise<StockMovementSnapshot | null>;
   /**
    * Units already reintegrated against one sale movement by SALE_CANCELLATION
    * and CUSTOMER_RETURN movements that reference it. Locked read used inside
    * the reintegration transaction to cap cumulative compensations.
    */
-  sumReintegrated(executor: CommandExecutor, saleMovementPublicId: string): Promise<number>;
+  sumReintegrated(executor: CommandExecutor, saleMovementId: number): Promise<number>;
   /**
    * Up to `limit` reservations whose deadline already passed at `asOf`, read
    * under locks, ready for automatic expiry processing.

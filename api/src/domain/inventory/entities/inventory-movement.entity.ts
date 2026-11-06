@@ -29,6 +29,10 @@ export interface StockMovementSnapshot {
   reason: string;
   /** Optional document reference (invoice, receipt, order...). */
   sourceReference: string | null;
+  /** Internal order associated with this sale or reintegration, if any. */
+  orderId?: number | null;
+  /** Internal SALE movement compensated by this reintegration, if any. */
+  relatedSaleMovementId?: number | null;
   /** Public identifier of the sale movement being reintegrated, if any. */
   relatedSalePublicId: string | null;
   /** Creation instant, ISO string (UTC). */

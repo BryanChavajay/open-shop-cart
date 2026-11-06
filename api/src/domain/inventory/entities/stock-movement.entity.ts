@@ -25,6 +25,8 @@ export interface NewStockMovementData {
   userId: number;
   reason: string;
   sourceReference: string | null;
+  orderId?: number | null;
+  relatedSaleMovementId?: number | null;
   relatedSalePublicId: string | null;
   /** Creation instant, ISO string (UTC), provided by the use case clock. */
   createdAt: string;
@@ -50,6 +52,22 @@ export class StockMovement {
       data.reason,
       data.sourceReference,
       data.relatedSalePublicId,
+    );
+    const orderId = data.orderId === null || data.orderId === undefined
+      ? null
+      : requirePositiveInteger(data.orderId, "orderId");
+    const relatedSaleMovementId =
+      data.relatedSaleMovementId === null
+      || data.relatedSaleMovementId === undefined
+        ? null
+        : requirePositiveInteger(
+          data.relatedSaleMovementId,
+          "relatedSaleMovementId",
+        );
+    assertInternalSaleRelations(
+      data.movementType,
+      orderId,
+      relatedSaleMovementId,
     );
     if (!Number.isInteger(data.balanceAfter) || data.balanceAfter < 0) {
       throw new BusinessRuleViolation(
@@ -82,6 +100,8 @@ export class StockMovement {
       userId: requirePositiveInteger(data.userId, "userId"),
       reason: shape.reason,
       sourceReference: shape.sourceReference,
+      orderId,
+      relatedSaleMovementId,
       relatedSalePublicId: shape.relatedSalePublicId,
       createdAt: data.createdAt,
     });
@@ -136,6 +156,14 @@ export class StockMovement {
     return this.state.sourceReference;
   }
 
+  get orderId(): number | null {
+    return this.state.orderId ?? null;
+  }
+
+  get relatedSaleMovementId(): number | null {
+    return this.state.relatedSaleMovementId ?? null;
+  }
+
   get relatedSalePublicId(): string | null {
     return this.state.relatedSalePublicId;
   }
@@ -147,5 +175,53 @@ export class StockMovement {
   /** Copy of the current state. */
   toSnapshot(): StockMovementSnapshot {
     return { ...this.state };
+  }
+}
+
+function assertInternalSaleRelations(
+  movementType: StockMovementType,
+  orderId: number | null,
+  relatedSaleMovementId: number | null,
+): void {
+  if (movementType === StockMovementType.SALE) {
+    if (orderId === null) {
+      throw new BusinessRuleViolation(
+        "A sale movement requires an internal order id",
+        ErrorCode.REQUIRED_FIELD_MISSING,
+        "orderId",
+        undefined,
+      );
+    }
+    if (relatedSaleMovementId !== null) {
+      throw new BusinessRuleViolation(
+        "A sale movement cannot reference another sale movement",
+        ErrorCode.INVALID_INPUT,
+        "relatedSaleMovementId",
+        undefined,
+      );
+    }
+    return;
+  }
+  if (
+    movementType === StockMovementType.SALE_CANCELLATION
+    || movementType === StockMovementType.CUSTOMER_RETURN
+  ) {
+    if (orderId === null || relatedSaleMovementId === null) {
+      throw new BusinessRuleViolation(
+        "A reintegration movement requires its order and sale movement ids",
+        ErrorCode.REQUIRED_FIELD_MISSING,
+        orderId === null ? "orderId" : "relatedSaleMovementId",
+        undefined,
+      );
+    }
+    return;
+  }
+  if (orderId !== null || relatedSaleMovementId !== null) {
+    throw new BusinessRuleViolation(
+      "This movement type cannot carry sale relations",
+      ErrorCode.INVALID_INPUT,
+      orderId !== null ? "orderId" : "relatedSaleMovementId",
+      undefined,
+    );
   }
 }

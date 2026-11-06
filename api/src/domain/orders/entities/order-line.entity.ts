@@ -8,8 +8,12 @@ import { ErrorCode } from "../../shared/enums/error-code.enum.js";
  * returns. Maps 1:1 the line rowset of the order-detail stored procedures.
  */
 export interface OrderLineSnapshot {
+  /** Internal identifier of the persisted order line. */
+  lineId: number;
   /** Public identifier of the order line (UUID). */
   linePublicId: string;
+  /** Internal identifier of the sold variant. */
+  variantId: number;
   /** Public identifier of the sold variant. */
   variantPublicId: string;
   /** SKU frozen at purchase time (survives SKU changes). */

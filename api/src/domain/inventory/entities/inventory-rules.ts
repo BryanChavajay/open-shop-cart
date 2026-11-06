@@ -106,7 +106,7 @@ export function requireInstant(value: string, field: string): Date {
 
 /**
  * Enforces the per-type shape of a kardex movement: sign of the delta, the
- * mandatory reason and the presence rules of `relatedSalePublicId`. Shared by
+ * mandatory reason and the UUID compatibility field. Shared by
  * `StockMovement.create` and `StockBalance.applyMovement` so both entry points
  * agree on the rules.
  */
@@ -130,24 +130,15 @@ export function assertMovementShape(
   } else if (movementType === StockMovementType.PURCHASE_RECEIPT) {
     assertNoRelatedSale(relatedSalePublicId);
     assertDeltaSign(quantityDelta, "greater than zero");
+  } else if (movementType === StockMovementType.SALE) {
+    assertNoRelatedSale(relatedSalePublicId);
+    assertDeltaSign(quantityDelta, "lower than zero", quantityDelta < 0);
   } else if (
-    movementType === StockMovementType.SALE ||
-    movementType === StockMovementType.CUSTOMER_RETURN ||
-    movementType === StockMovementType.SALE_CANCELLATION
+    movementType === StockMovementType.CUSTOMER_RETURN
+    || movementType === StockMovementType.SALE_CANCELLATION
   ) {
-    if (relatedSalePublicId === null) {
-      throw new BusinessRuleViolation(
-        `The required field relatedSalePublicId was not provided for a ${movementType} movement`,
-        ErrorCode.REQUIRED_FIELD_MISSING,
-        "relatedSalePublicId",
-        undefined,
-      );
-    }
-    if (movementType === StockMovementType.SALE) {
-      assertDeltaSign(quantityDelta, "lower than zero", quantityDelta < 0);
-    } else {
-      assertDeltaSign(quantityDelta, "greater than zero");
-    }
+    assertNoRelatedSale(relatedSalePublicId);
+    assertDeltaSign(quantityDelta, "greater than zero");
   }
   return {
     reason: requireTrimmedText(reason, "reason", REASON_MAX_LENGTH),

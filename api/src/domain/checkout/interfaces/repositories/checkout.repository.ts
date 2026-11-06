@@ -38,6 +38,7 @@ export interface CheckoutOperationRecord {
 /** One frozen line of a registered order. */
 export interface OrderLineRow {
   linePublicId: string;
+  variantId: number;
   variantPublicId: string;
   sku: string;
   productName: string;
@@ -153,22 +154,22 @@ export interface CheckoutReadRepository {
     orderPublicId: string,
   ): Promise<OrderVerificationRow | null>;
   /**
-   * Header + payment row of one order; the optional customer id restricts to
-   * the owner (RF-01). Used by idempotent replays of the confirmation.
+   * Header + payment row of one order already resolved by its internal id;
+   * the customer id preserves the ownership check for idempotent replays.
    */
   findOrderRow(
     executor: CommandExecutor,
-    context: { orderPublicId: string; customerId: number },
+    context: { orderId: number; customerId: number },
   ): Promise<OrderVerificationRow | null>;
   /** Locked read of one complete order snapshot (verification flows). */
   findOrderSnapshotLocked(
     executor: CommandExecutor,
     orderPublicId: string,
   ): Promise<OrderSnapshot | null>;
-  /** Frozen lines of one order, resolved by its public id. */
+  /** Frozen lines of one order already resolved by its internal id. */
   listOrderLines(
     executor: CommandExecutor,
-    orderPublicId: string,
+    orderId: number,
   ): Promise<OrderLineRow[]>;
 }
 
